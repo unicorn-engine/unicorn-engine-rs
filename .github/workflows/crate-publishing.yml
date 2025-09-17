@@ -35,6 +35,8 @@ jobs:
           - { os: macos-latest, arch: x64, name: "macOS x86_64" }
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - name: Set up Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -51,10 +53,16 @@ jobs:
         run: |
           choco install ninja
 
-      - name: "🚧 Dry-run publish and test"
+      - name: "🚧 cargo test"
         run: |
           cargo test && cargo publish -p unicorn-engine-sys --dry-run --target-dir ./build_uc --allow-dirty && \
           cargo publish -p unicorn-engine --dry-run --target-dir ./build_uc_sys --allow-dirty 
+
+      - name: "🚧 Dry-run publish"
+        uses: actions/upload-artifact@v4
+        run: |
+          cargo test && cargo publish -p unicorn-engine-sys --dry-run --target-dir ./build_uc --allow-dirty && \
+          cargo publish -p unicorn-engine --dry-run --target-dir ./build_uc_sys --allow-dirty
 
       - name: "🚧 Upload artifacts"
         uses: actions/upload-artifact@v4
