@@ -317,8 +317,8 @@ impl ParseCallbacks for Renamer {
 }
 
 fn generate_bindings() {
-    let header_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("unicorn/include/unicorn/unicorn.h");
+    let header_path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("unicorn/include/unicorn/unicorn.h");
 
     let bitflag_enums = [
         "uc_hook_type",
