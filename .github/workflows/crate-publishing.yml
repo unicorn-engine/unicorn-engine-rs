@@ -60,6 +60,7 @@ jobs:
 
       - name: "🚧 Dry-run publish"
         uses: actions/upload-artifact@v4
+        if: contains(matrix.config.os, 'ubuntu')
         run: |
           cargo test && cargo publish -p unicorn-engine-sys --dry-run --target-dir ./build_uc --allow-dirty && \
           cargo publish -p unicorn-engine --dry-run --target-dir ./build_uc_sys --allow-dirty
