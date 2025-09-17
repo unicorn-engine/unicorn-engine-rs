@@ -58,6 +58,7 @@ jobs:
 
       - name: "🚧 Upload artifacts"
         uses: actions/upload-artifact@v4
+        if: contains(matrix.config.os, 'ubuntu')
         with:
           path: |
             build_uc_sys
