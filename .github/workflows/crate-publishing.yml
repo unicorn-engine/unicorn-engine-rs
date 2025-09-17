@@ -51,10 +51,17 @@ jobs:
         run: |
           choco install ninja
 
-      - name: "🚧 Cargo test"
-        if: "!startsWith(github.ref, 'refs/tags')"
+      - name: "🚧 Dry-run publish and test"
         run: |
-          cargo test && cargo publish --dry-run --target-dir ./build_publish --allow-dirty
+          cargo test && cargo publish -p unicorn-engine-sys --dry-run --target-dir ./build_uc --allow-dirty && \
+          cargo publish -p unicorn-engine --dry-run --target-dir ./build_uc_sys --allow-dirty 
+
+      - name: "🚧 Upload artifacts"
+        uses: actions/upload-artifact@v4
+        with:
+          path: |
+            build_uc_sys
+            build_uc
 
       - name: Publish crates to Crates.io
         if: startsWith(github.ref, 'refs/tags') && !startsWith(github.ref, 'refs/tags/v') && contains(matrix.config.os, 'ubuntu')
