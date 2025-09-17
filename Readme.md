@@ -40,4 +40,8 @@ At this moment, we release both crates to `uncorn-engine-sys` and `unicorn-engin
 
 ## Acknowledgements
 
-These bindings were once based on Sébastien Duquette's (@ekse) [unicorn-rs](https://github.com/unicorn-rs/unicorn-rs). We picked up the project, as it is no longer maintained. Thanks to all contributors.
+These bindings were once based on Sébastien Duquette's (@ekse) [unicorn-rs](https://github.com/unicorn-rs/unicorn-rs). We picked up the project, as it is no longer maintained. 
+
+@amaanq (https://github.com/amaanq) polishes the bindings and makes `unicorn-engine-sys`.
+
+Thanks to all contributors.
