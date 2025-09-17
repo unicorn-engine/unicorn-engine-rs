@@ -25,6 +25,8 @@ fn main() {
 
 Further sample code can be found in [tests](./src/tests).
 
+See [unicorn-engine-sys](./crates/unicorn-sys/) for low-level access.
+
 ## Usage
 
 Add this to your `Cargo.toml`:
