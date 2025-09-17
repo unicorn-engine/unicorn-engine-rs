@@ -11,7 +11,7 @@ categories = ["api-bindings", "emulators", "no-std", "virtualization"]
 documentation = "https://github.com/unicorn-engine/unicorn/wiki"
 edition = "2024"
 license = "GPL-2.0"
-readme = "./bindings/rust/sys/README.md"
+readme = "./Readme.md"
 repository = "https://github.com/unicorn-engine/unicorn"
 description = "Rust bindings for the Unicorn emulator with utility functions"
 
