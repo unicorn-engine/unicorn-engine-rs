@@ -64,35 +64,37 @@ impl TryFrom<i32> for Mode {
 
     #[allow(clippy::cognitive_complexity)]
     fn try_from(v: i32) -> Result<Self, Self::Error> {
-        match v {
-            x if x == Self::LITTLE_ENDIAN.0 as i32 => Ok(Self::LITTLE_ENDIAN),
-            x if x == Self::BIG_ENDIAN.0 as i32 => Ok(Self::BIG_ENDIAN),
-            x if x == Self::ARM.0 as i32 => Ok(Self::ARM),
-            x if x == Self::THUMB.0 as i32 => Ok(Self::THUMB),
-            x if x == Self::MCLASS.0 as i32 => Ok(Self::MCLASS),
-            x if x == Self::V8.0 as i32 => Ok(Self::V8),
-            x if x == Self::ARMBE8.0 as i32 => Ok(Self::ARMBE8),
-            x if x == Self::ARM926.0 as i32 => Ok(Self::ARM926),
-            x if x == Self::ARM946.0 as i32 => Ok(Self::ARM946),
-            x if x == Self::ARM1176.0 as i32 => Ok(Self::ARM1176),
-            x if x == Self::MICRO.0 as i32 => Ok(Self::MICRO),
-            x if x == Self::MIPS3.0 as i32 => Ok(Self::MIPS3),
-            x if x == Self::MIPS32R6.0 as i32 => Ok(Self::MIPS32R6),
-            x if x == Self::MIPS32.0 as i32 => Ok(Self::MIPS32),
-            x if x == Self::MIPS64.0 as i32 => Ok(Self::MIPS64),
-            x if x == Self::MODE_16.0 as i32 => Ok(Self::MODE_16),
-            x if x == Self::MODE_32.0 as i32 => Ok(Self::MODE_32),
-            x if x == Self::MODE_64.0 as i32 => Ok(Self::MODE_64),
-            x if x == Self::PPC32.0 as i32 => Ok(Self::PPC32),
-            x if x == Self::PPC64.0 as i32 => Ok(Self::PPC64),
-            x if x == Self::QPX.0 as i32 => Ok(Self::QPX),
-            x if x == Self::SPARC32.0 as i32 => Ok(Self::SPARC32),
-            x if x == Self::SPARC64.0 as i32 => Ok(Self::SPARC64),
-            x if x == Self::V9.0 as i32 => Ok(Self::V9),
-            x if x == Self::RISCV32.0 as i32 => Ok(Self::RISCV32),
-            x if x == Self::RISCV64.0 as i32 => Ok(Self::RISCV64),
-            _ => Err(uc_error::MODE),
+        const VALID_MODES: i32 = (Mode::LITTLE_ENDIAN.0
+            | Mode::BIG_ENDIAN.0
+            | Mode::ARM.0
+            | Mode::THUMB.0
+            | Mode::MCLASS.0
+            | Mode::V8.0
+            | Mode::ARMBE8.0
+            | Mode::ARM926.0
+            | Mode::ARM946.0
+            | Mode::ARM1176.0
+            | Mode::MICRO.0
+            | Mode::MIPS3.0
+            | Mode::MIPS32R6.0
+            | Mode::MIPS32.0
+            | Mode::MIPS64.0
+            | Mode::MODE_16.0
+            | Mode::MODE_32.0
+            | Mode::MODE_64.0
+            | Mode::PPC32.0
+            | Mode::PPC64.0
+            | Mode::QPX.0
+            | Mode::SPARC32.0
+            | Mode::SPARC64.0
+            | Mode::V9.0
+            | Mode::RISCV32.0
+            | Mode::RISCV64.0) as i32;
+
+        if (v & !VALID_MODES) != 0 {
+            return Err(uc_error::MODE);
         }
+        Ok(Self(v as u32))
     }
 }
 
