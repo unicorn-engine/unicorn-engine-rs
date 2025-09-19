@@ -94,7 +94,7 @@ impl TryFrom<i32> for Mode {
         if (v & !VALID_MODES) != 0 {
             return Err(uc_error::MODE);
         }
-        Ok(Self(v as u32).try_into().map_err(|_| uc_error::MODE)?)
+        Ok(Self(v.try_into().map_err(|_| uc_error::MODE)?))
     }
 }
 
