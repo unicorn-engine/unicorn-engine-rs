@@ -375,6 +375,20 @@ impl<'a, D> Unicorn<'a, D> {
         .into()
     }
 
+    /// Write the data in `bytes` to the emulated virtual address
+    pub fn vmem_write(&mut self, address: u64, prot: Prot, bytes: &[u8]) -> Result<(), uc_error> {
+        unsafe {
+            uc_vmem_write(
+                self.get_handle(),
+                address,
+                prot,
+                bytes.as_ptr().cast(),
+                bytes.len().try_into().unwrap(),
+            )
+        }
+        .into()
+    }
+
     /// translate virtual to physical address
     pub fn vmem_translate(&mut self, address: u64, prot: Prot) -> Result<u64, uc_error> {
         let mut physical: u64 = 0;
