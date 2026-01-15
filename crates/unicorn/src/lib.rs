@@ -1236,6 +1236,22 @@ impl<'a, D> Unicorn<'a, D> {
         unsafe { uc_emu_start(self.get_handle(), begin, until, timeout, count as _) }.into()
     }
 
+    /// Emulate machine code starting from the current instruction pointer.
+    ///
+    /// The emulation stops if `until` is hit. `timeout` specifies a duration in microseconds
+    /// after which the emulation is stopped (infinite execution if set to 0). `count` is the
+    /// maximum number of instructions to emulate (emulate all the available instructions if
+    /// set to 0).
+    pub fn emu_start(
+        &mut self,
+        begin: u64,
+        until: u64,
+        timeout: u64,
+        count: usize,
+    ) -> Result<(), uc_error> {
+        unsafe { uc_emu_run(self.get_handle(), until, timeout, count as _) }.into()
+    }
+
     /// Stop the emulation.
     ///
     /// This is usually called from callback function in hooks.
