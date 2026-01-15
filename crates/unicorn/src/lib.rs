@@ -1414,6 +1414,18 @@ impl<'a, D> Unicorn<'a, D> {
         })
     }
 
+    pub fn ctl_get_invalid_addr(&self) -> Result<u64, uc_error> {
+        let mut addr: u64 = 0;
+        unsafe {
+            uc_ctl(
+                self.get_handle(),
+                UC_CTL_READ!(ControlType::INVALID_ADDR),
+                &mut addr,
+            )
+        }
+        .and(Ok(addr))
+    }
+
     pub fn ctl_set_exits(&mut self, exits: &[u64]) -> Result<(), uc_error> {
         unsafe {
             uc_ctl(
