@@ -543,7 +543,7 @@ impl<'a, D> Unicorn<'a, D> {
         unsafe { uc_mem_protect(self.get_handle(), address, size, perms.0 as _) }.into()
     }
 
-    /// Write an unsigned value from a register.
+    /// Write an unsigned value to a register.
     pub fn reg_write<T: Into<i32>>(&mut self, regid: T, value: u64) -> Result<(), uc_error> {
         unsafe { uc_reg_write(self.get_handle(), regid.into(), (&raw const value).cast()) }.into()
     }
