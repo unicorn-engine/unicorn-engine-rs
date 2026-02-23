@@ -68,6 +68,10 @@ pub unsafe extern "C" fn code_hook_proxy<D, F>(
 ) where
     F: FnMut(&mut crate::Unicorn<D>, u64, u32),
 {
+    if user_data.is_null() {
+        return;
+    }
+
     let user_data = unsafe { &mut *user_data };
     let mut user_data_uc = Unicorn {
         inner: user_data.uc.upgrade().unwrap(),
