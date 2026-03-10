@@ -1,5 +1,7 @@
 use unicorn_engine_sys::RegisterRISCV;
 
+use crate::arch::riscv::RiscV;
+
 use super::*;
 
 #[test]
@@ -11,7 +13,7 @@ fn test_riscv32_nop() {
     let t0 = 0x1234;
     let t1 = 0x5678;
 
-    let mut uc = uc_common_setup(Arch::RISCV, Mode::RISCV32, None, &code, ());
+    let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV32, None, &code, ());
     uc.reg_write(RegisterRISCV::T0, t0).unwrap();
     uc.reg_write(RegisterRISCV::T1, t1).unwrap();
 
@@ -33,7 +35,7 @@ fn test_riscv64_nop() {
     let t0 = 0x1234;
     let t1 = 0x5678;
 
-    let mut uc = uc_common_setup(Arch::RISCV, Mode::RISCV64, None, &code, ());
+    let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV64, None, &code, ());
     uc.reg_write(RegisterRISCV::T0, t0).unwrap();
     uc.reg_write(RegisterRISCV::T1, t1).unwrap();
 
@@ -54,7 +56,7 @@ fn test_riscv32_until_pc_update() {
         0x13, 0x01, 0x81, 0x00, // addi sp, sp, 8
     ];
 
-    let mut uc = uc_common_setup(Arch::RISCV, Mode::RISCV32, None, &code, ());
+    let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV32, None, &code, ());
 
     let mut t0 = 0x1234;
     let mut t1 = 0x7890;
@@ -87,7 +89,7 @@ fn test_riscv64_until_pc_update() {
         0x13, 0x01, 0x81, 0x00, // addi sp, sp, 8
     ];
 
-    let mut uc = uc_common_setup(Arch::RISCV, Mode::RISCV64, None, &code, ());
+    let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV64, None, &code, ());
 
     let mut t0 = 0x1234;
     let mut t1 = 0x7890;
@@ -120,7 +122,7 @@ fn test_riscv32_3steps_pc_update() {
         0x13, 0x01, 0x81, 0x00, // addi sp, sp, 8
     ];
 
-    let mut uc = uc_common_setup(Arch::RISCV, Mode::RISCV32, None, &code, ());
+    let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV32, None, &code, ());
 
     let mut t0 = 0x1234;
     let mut t1 = 0x7890;
@@ -152,7 +154,7 @@ fn test_riscv64_3steps_pc_update() {
         0x13, 0x01, 0x81, 0x00, // addi sp, sp, 8
     ];
 
-    let mut uc = uc_common_setup(Arch::RISCV, Mode::RISCV64, None, &code, ());
+    let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV64, None, &code, ());
 
     let mut t0 = 0x1234;
     let mut t1 = 0x7890;
@@ -185,7 +187,7 @@ fn test_riscv32_fp_move() {
     let mut f1 = 0x123456781a2b3c4d;
     let mut f3 = 0x56780246aaaabbbb;
 
-    let mut uc = uc_common_setup(Arch::RISCV, Mode::RISCV32, None, &code, ());
+    let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV32, None, &code, ());
 
     uc.reg_write(RegisterRISCV::F1, f1).unwrap();
     uc.reg_write(RegisterRISCV::F3, f3).unwrap();
@@ -208,7 +210,7 @@ fn test_riscv64_fp_move() {
     let mut f1 = 0x123456781a2b3c4d;
     let mut f3 = 0x56780246aaaabbbb;
 
-    let mut uc = uc_common_setup(Arch::RISCV, Mode::RISCV64, None, &code, ());
+    let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV64, None, &code, ());
 
     uc.reg_write(RegisterRISCV::F1, f1).unwrap();
     uc.reg_write(RegisterRISCV::F3, f3).unwrap();
@@ -233,7 +235,7 @@ fn test_riscv64_fp_move_from_int() {
     let mut s6 = 0x56785678;
     let x3 = 0x6000;
 
-    let mut uc = uc_common_setup(Arch::RISCV, Mode::RISCV64, None, &code, ());
+    let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV64, None, &code, ());
 
     uc.reg_write(RegisterRISCV::FT0, ft0).unwrap();
     uc.reg_write(RegisterRISCV::S6, s6).unwrap();
@@ -260,7 +262,7 @@ fn test_riscv64_fp_move_from_int_reg_write() {
     let mut s6 = 0x56785678;
     let mstatus = 0x6000;
 
-    let mut uc = uc_common_setup(Arch::RISCV, Mode::RISCV64, None, &code, ());
+    let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV64, None, &code, ());
 
     uc.reg_write(RegisterRISCV::FT0, ft0).unwrap();
     uc.reg_write(RegisterRISCV::S6, s6).unwrap();
@@ -288,7 +290,7 @@ fn test_riscv64_fp_move_to_int() {
     let mut s6 = 0x56785678;
     let x3 = 0x6000;
 
-    let mut uc = uc_common_setup(Arch::RISCV, Mode::RISCV64, None, &code, ());
+    let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV64, None, &code, ());
 
     uc.reg_write(RegisterRISCV::FT0, ft0).unwrap();
     uc.reg_write(RegisterRISCV::S6, s6).unwrap();
@@ -311,7 +313,7 @@ fn test_riscv64_code_patching() {
         0x93, 0x82, 0x12, 0x00, // addi t0, t0, 0x1
     ];
 
-    let mut uc = uc_common_setup(Arch::RISCV, Mode::RISCV64, None, &code, ());
+    let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV64, None, &code, ());
 
     // Zero out t0 and t1
     let mut t0 = 0x0;
@@ -348,7 +350,7 @@ fn test_riscv64_code_patching_count() {
         0x93, 0x82, 0x12, 0x00, // addi t0, t0, 0x1
     ];
 
-    let mut uc = uc_common_setup(Arch::RISCV, Mode::RISCV64, None, &code, ());
+    let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV64, None, &code, ());
 
     // Zero out t0 and t1
     let mut t0 = 0x0;
@@ -385,7 +387,7 @@ fn test_riscv64_ecall() {
         0x73, 0x00, 0x00, 0x00, // ecall
     ];
 
-    let mut uc = uc_common_setup(Arch::RISCV, Mode::RISCV64, None, &code, ());
+    let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV64, None, &code, ());
 
     uc.add_intr_hook(|uc, _| uc.emu_stop().unwrap()).unwrap();
 
@@ -405,7 +407,7 @@ fn test_riscv32_mmio_map() {
         0x1c, 0x4f,             // c.lw a5, 0x18(a4)
     ];
 
-    let mut uc = uc_common_setup(Arch::RISCV, Mode::RISCV32, None, &code, ());
+    let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV32, None, &code, ());
 
     uc.mmio_map_ro(0x40000000, 0x40000, |uc, offset, _size| {
         let a4 = uc.reg_read(RegisterRISCV::A4).unwrap();
@@ -427,7 +429,7 @@ fn test_riscv32_map() {
         0x1c, 0x4f,             // c.lw a5, 0x18(a4)
     ];
 
-    let mut uc = uc_common_setup(Arch::RISCV, Mode::RISCV32, None, &code, ());
+    let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV32, None, &code, ());
 
     let val = 0xdeadbeefu64;
     uc.mem_map(0x40000000, 0x40000, Prot::ALL).unwrap();
@@ -449,7 +451,7 @@ fn test_riscv64_mmio_map() {
         0x1c, 0x4f,             // c.lw a5, 0x18(a4)
     ];
 
-    let mut uc = uc_common_setup(Arch::RISCV, Mode::RISCV64, None, &code, ());
+    let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV64, None, &code, ());
 
     uc.mmio_map_ro(0x40000000, 0x40000, |uc, offset, _size| {
         let a4 = uc.reg_read(RegisterRISCV::A4).unwrap();
@@ -472,7 +474,7 @@ fn test_riscv_correct_address_in_small_jump_hook() {
         0x67, 0x80, 0x02, 0x00, // jr x5
     ];
 
-    let mut uc = uc_common_setup(Arch::RISCV, Mode::RISCV64, None, &code, ());
+    let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV64, None, &code, ());
 
     uc.add_mem_hook(HookType::MEM_UNMAPPED, 1, 0, |uc, _, address, _, _| {
         // Check registers
@@ -509,7 +511,7 @@ fn test_riscv_correct_address_in_long_jump_hook() {
         0x67, 0x80, 0x02, 0x00, // jr x5
     ];
 
-    let mut uc = uc_common_setup(Arch::RISCV, Mode::RISCV64, None, &code, ());
+    let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV64, None, &code, ());
 
     uc.add_mem_hook(HookType::MEM_UNMAPPED, 1, 0, |uc, _, address, _, _| {
         // Check registers
@@ -538,7 +540,11 @@ fn test_riscv_correct_address_in_long_jump_hook() {
 
 #[test]
 fn test_riscv_mmu() {
-    fn test_riscv_mmu_prepare_tlb(uc: &mut Unicorn<'_, ()>, data_address: u64, code_address: u64) {
+    fn test_riscv_mmu_prepare_tlb(
+        uc: &mut Unicorn<'_, (), RiscV>,
+        data_address: u64,
+        code_address: u64,
+    ) {
         let sptbr = 0x2000;
         uc.mem_map(sptbr, 0x3000, Prot::ALL).unwrap(); // tlb base
 
@@ -581,7 +587,7 @@ fn test_riscv_mmu() {
         0x13, 0x00, 0x00, 0x00,                         // nop
     ];
 
-    let mut uc = Unicorn::new(Arch::RISCV, Mode::RISCV64).unwrap();
+    let mut uc = Unicorn::new(Mode::RISCV64).unwrap();
     uc.ctl_set_tlb_type(TlbType::CPU).unwrap();
     uc.add_code_hook(1, 0, |uc, address, _| {
         if address == 0x15010 {
@@ -631,7 +637,7 @@ fn test_riscv_priv() {
 
     let main_end_address = main_address + code_main.len() as u64;
 
-    let mut uc = Unicorn::new(Arch::RISCV, Mode::RISCV64).unwrap();
+    let mut uc = Unicorn::<_, RiscV>::new(Mode::RISCV64).unwrap();
     uc.ctl_set_tlb_type(TlbType::CPU).unwrap();
     uc.mem_map(m_entry_address, 0x1000, Prot::ALL).unwrap();
     uc.mem_map(main_address, 0x1000, Prot::ALL).unwrap();

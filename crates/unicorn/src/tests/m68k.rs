@@ -1,5 +1,7 @@
 use unicorn_engine_sys::RegisterM68K;
 
+use crate::arch::m68k::M68K;
+
 use super::*;
 
 #[test]
@@ -8,7 +10,7 @@ fn test_move_to_sr() {
         0x46, 0xfc, 0x27, 0x00, // move #$2700, sr
     ];
 
-    let mut uc = uc_common_setup(Arch::M68K, Mode::BIG_ENDIAN, None, &code, ());
+    let mut uc = uc_common_setup::<_, M68K>(Mode::BIG_ENDIAN, None, &code, ());
 
     let mut sr = uc.reg_read(RegisterM68K::SR).unwrap();
     sr |= 0x2000;
@@ -27,7 +29,7 @@ fn test_sr_contains_flags() {
         0x76, 0xed, // moveq #-19, %d3
     ];
 
-    let mut uc = uc_common_setup(Arch::M68K, Mode::BIG_ENDIAN, None, &code, ());
+    let mut uc = uc_common_setup::<_, M68K>(Mode::BIG_ENDIAN, None, &code, ());
     let code_start_u64: usize = CODE_START.try_into().unwrap();
     let code_len_u64: usize = code.len().try_into().unwrap();
     let code_len_addition: usize = code_start_u64 + code_len_u64;

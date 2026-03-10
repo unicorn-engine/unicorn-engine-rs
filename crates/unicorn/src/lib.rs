@@ -6,14 +6,14 @@
 //!
 //! ```rust
 //! use unicorn_engine::{
-//!     RegisterARM,
-//!     unicorn_const::{Arch, Mode, Prot, SECOND_SCALE},
+//!     Arm, RegisterARM, Unicorn,
+//!     unicorn_const::{Mode, Prot, SECOND_SCALE},
 //! };
 //!
 //! fn emulate() {
 //!     let arm_code32 = [0x17, 0x00, 0x40, 0xe2]; // sub r0, #23
 //!
-//!     let mut emu = unicorn_engine::Unicorn::new(Arch::ARM, Mode::LITTLE_ENDIAN)
+//!     let mut emu: Unicorn<(), Arm> = unicorn_engine::Unicorn::new(Mode::LITTLE_ENDIAN)
 //!         .expect("failed to initialize Unicorn instance");
 //!     emu.mem_map(0x1000, 0x4000, Prot::ALL)
 //!         .expect("failed to map code page");
@@ -43,11 +43,14 @@
 extern crate alloc;
 
 use alloc::{boxed::Box, rc::Rc, vec::Vec};
-use core::{cell::UnsafeCell, ffi::c_void, ptr};
+use core::{cell::UnsafeCell, ffi::c_void, marker::PhantomData, ptr};
 
 #[macro_use]
 pub mod unicorn_const;
+pub use arch::*;
 pub use unicorn_const::*;
+
+pub mod arch;
 pub mod hook; // lets consumers call hooks
 
 #[cfg(test)]
@@ -137,10 +140,10 @@ impl MmioCallbackScope<'_> {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct UcHookId(uc_hook);
 
-pub struct UnicornInner<'a, D> {
+pub struct UnicornInner<'a, D, A: UcArch> {
     pub handle: *mut uc_engine,
     pub ffi: bool,
-    pub arch: Arch,
+    pub arch: PhantomData<A>,
     /// to keep ownership over the hook for this uc instance's lifetime
     pub hooks: Vec<(UcHookId, Box<dyn hook::IsUcHook<'a> + 'a>)>,
     /// To keep ownership over the mmio callbacks for this uc instance's lifetime
@@ -148,7 +151,7 @@ pub struct UnicornInner<'a, D> {
     pub data: D,
 }
 
-impl<D> Drop for UnicornInner<'_, D> {
+impl<D, A: UcArch> Drop for UnicornInner<'_, D, A> {
     fn drop(&mut self) {
         if !self.ffi && !self.handle.is_null() {
             unsafe { uc_close(self.handle) };
@@ -160,15 +163,15 @@ impl<D> Drop for UnicornInner<'_, D> {
 /// A Unicorn emulator instance.
 ///
 /// You could clone this instance cheaply, since it has an `Rc` inside.
-pub struct Unicorn<'a, D: 'a> {
-    inner: Rc<UnsafeCell<UnicornInner<'a, D>>>,
+pub struct Unicorn<'a, D: 'a, A: UcArch + 'a> {
+    inner: Rc<UnsafeCell<UnicornInner<'a, D, A>>>,
 }
 
-impl<'a> Unicorn<'a, ()> {
+impl<'a, A: UcArch> Unicorn<'a, (), A> {
     /// Create a new instance of the unicorn engine for the specified architecture
     /// and hardware mode.
-    pub fn new(arch: Arch, mode: Mode) -> Result<Unicorn<'a, ()>, uc_error> {
-        Self::new_with_data(arch, mode, ())
+    pub fn new(mode: Mode) -> Result<Unicorn<'a, (), A>, uc_error> {
+        Self::new_with_data(mode, ())
     }
 
     /// # Safety
@@ -177,25 +180,26 @@ impl<'a> Unicorn<'a, ()> {
     /// Calling the function with a non null pointer value that
     /// does not point to a unicorn instance will cause undefined
     /// behavior.
-    pub unsafe fn from_handle(handle: *mut uc_engine) -> Result<Unicorn<'a, ()>, uc_error> {
+    pub unsafe fn from_handle(handle: *mut uc_engine) -> Result<Unicorn<'a, (), A>, uc_error> {
         unsafe { Self::from_handle_with_data(handle, ()) }
     }
 }
 
-impl<'a, D> Unicorn<'a, D>
+impl<'a, D, A: UcArch> Unicorn<'a, D, A>
 where
     D: 'a,
+    A: 'a,
 {
     /// Create a new instance of the unicorn engine for the specified architecture
     /// and hardware mode.
-    pub fn new_with_data(arch: Arch, mode: Mode, data: D) -> Result<Unicorn<'a, D>, uc_error> {
+    pub fn new_with_data(mode: Mode, data: D) -> Result<Self, uc_error> {
         let mut handle = ptr::null_mut();
-        unsafe { uc_open(arch, mode, &mut handle) }.and_then(|| {
+        unsafe { uc_open(A::arch(), mode, &mut handle) }.and_then(|| {
             Ok(Unicorn {
                 inner: Rc::new(UnsafeCell::from(UnicornInner {
                     handle,
                     ffi: false,
-                    arch,
+                    arch: PhantomData,
                     data,
                     hooks: vec![],
                     mmio_callbacks: vec![],
@@ -210,10 +214,7 @@ where
     /// Calling the function with a non null pointer value that
     /// does not point to a unicorn instance will cause undefined
     /// behavior.
-    pub unsafe fn from_handle_with_data(
-        handle: *mut uc_engine,
-        data: D,
-    ) -> Result<Unicorn<'a, D>, uc_error> {
+    pub unsafe fn from_handle_with_data(handle: *mut uc_engine, data: D) -> Result<Self, uc_error> {
         if handle.is_null() {
             return Err(uc_error::HANDLE);
         }
@@ -226,7 +227,7 @@ where
             inner: Rc::new(UnsafeCell::from(UnicornInner {
                 handle,
                 ffi: true,
-                arch: arch.try_into()?,
+                arch: PhantomData,
                 data,
                 hooks: vec![],
                 mmio_callbacks: vec![],
@@ -235,13 +236,13 @@ where
     }
 }
 
-impl<D> core::fmt::Debug for Unicorn<'_, D> {
+impl<D, A: UcArch> core::fmt::Debug for Unicorn<'_, D, A> {
     fn fmt(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(formatter, "Unicorn {{ uc: {:p} }}", self.get_handle())
     }
 }
 
-impl<D> Clone for Unicorn<'_, D> {
+impl<D, A: UcArch> Clone for Unicorn<'_, D, A> {
     fn clone(&self) -> Self {
         Self {
             inner: Rc::clone(&self.inner),
@@ -249,12 +250,12 @@ impl<D> Clone for Unicorn<'_, D> {
     }
 }
 
-impl<'a, D> Unicorn<'a, D> {
-    fn inner(&self) -> &UnicornInner<'a, D> {
+impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
+    fn inner(&self) -> &UnicornInner<'a, D, A> {
         unsafe { self.inner.get().as_ref().unwrap() }
     }
 
-    fn inner_mut(&mut self) -> &mut UnicornInner<'a, D> {
+    fn inner_mut(&mut self) -> &mut UnicornInner<'a, D, A> {
         unsafe { self.inner.get().as_mut().unwrap() }
     }
 
@@ -276,7 +277,7 @@ impl<'a, D> Unicorn<'a, D> {
     /// Return the architecture of the current emulator.
     #[must_use]
     pub fn get_arch(&self) -> Arch {
-        self.inner().arch
+        A::arch()
     }
 
     /// Return the handle of the current emulator.
@@ -442,8 +443,8 @@ impl<'a, D> Unicorn<'a, D> {
         write_callback: Option<W>,
     ) -> Result<(), uc_error>
     where
-        R: FnMut(&mut Unicorn<'_, D>, u64, usize) -> u64 + 'a,
-        W: FnMut(&mut Unicorn<'_, D>, u64, usize, u64) + 'a,
+        R: FnMut(&mut Unicorn<'_, D, A>, u64, usize) -> u64 + 'a,
+        W: FnMut(&mut Unicorn<'_, D, A>, u64, usize, u64) + 'a,
     {
         let mut read_data = read_callback.map(|c| {
             Box::new(hook::UcHook {
@@ -460,7 +461,7 @@ impl<'a, D> Unicorn<'a, D> {
 
         let (read_cb, user_data_read) = read_data.as_mut().map_or((None, ptr::null_mut()), |d| {
             (
-                Some(hook::mmio_read_callback_proxy::<D, R> as _),
+                Some(hook::mmio_read_callback_proxy::<D, R, A> as _),
                 core::ptr::from_mut(d.as_mut()).cast(),
             )
         });
@@ -468,7 +469,7 @@ impl<'a, D> Unicorn<'a, D> {
         let (write_cb, user_data_write) =
             write_data.as_mut().map_or((None, ptr::null_mut()), |d| {
                 (
-                    Some(hook::mmio_write_callback_proxy::<D, W> as _),
+                    Some(hook::mmio_write_callback_proxy::<D, W, A> as _),
                     core::ptr::from_mut(d.as_mut()).cast(),
                 )
             });
@@ -504,13 +505,13 @@ impl<'a, D> Unicorn<'a, D> {
     /// `size` must be a multiple of 4kb or this will return `Error::ARG`.
     pub fn mmio_map_ro<F>(&mut self, address: u64, size: u64, callback: F) -> Result<(), uc_error>
     where
-        F: FnMut(&mut Unicorn<D>, u64, usize) -> u64 + 'a,
+        F: FnMut(&mut Unicorn<D, A>, u64, usize) -> u64 + 'a,
     {
         self.mmio_map(
             address,
             size,
             Some(callback),
-            None::<fn(&mut Unicorn<D>, u64, usize, u64)>,
+            None::<fn(&mut Unicorn<D, A>, u64, usize, u64)>,
         )
     }
 
@@ -520,12 +521,12 @@ impl<'a, D> Unicorn<'a, D> {
     /// `size` must be a multiple of 4kb or this will return `Error::ARG`.
     pub fn mmio_map_wo<F>(&mut self, address: u64, size: u64, callback: F) -> Result<(), uc_error>
     where
-        F: FnMut(&mut Unicorn<D>, u64, usize, u64) + 'a,
+        F: FnMut(&mut Unicorn<D, A>, u64, usize, u64) + 'a,
     {
         self.mmio_map(
             address,
             size,
-            None::<fn(&mut Unicorn<D>, u64, usize) -> u64>,
+            None::<fn(&mut Unicorn<D, A>, u64, usize) -> u64>,
             Some(callback),
         )
     }
@@ -558,8 +559,8 @@ impl<'a, D> Unicorn<'a, D> {
     }
 
     /// Write an unsigned value to a register.
-    pub fn reg_write<T: Into<i32>>(&mut self, regid: T, value: u64) -> Result<(), uc_error> {
-        unsafe { uc_reg_write(self.get_handle(), regid.into(), (&raw const value).cast()) }.into()
+    pub fn reg_write(&mut self, regid: A::Reg, value: u64) -> Result<(), uc_error> {
+        unsafe { uc_reg_write(self.get_handle(), regid.id(), (&raw const value).cast()) }.into()
     }
 
     /// Write values into batch of registers
@@ -602,10 +603,9 @@ impl<'a, D> Unicorn<'a, D> {
     /// Read an unsigned value from a register.
     ///
     /// Not to be used with registers larger than 64 bit.
-    pub fn reg_read<T: Into<i32>>(&self, regid: T) -> Result<u64, uc_error> {
+    pub fn reg_read(&self, reg: A::Reg) -> Result<u64, uc_error> {
         let mut value = 0;
-        unsafe { uc_reg_read(self.get_handle(), regid.into(), (&raw mut value).cast()) }
-            .and(Ok(value))
+        unsafe { uc_reg_read(self.get_handle(), reg.id(), (&raw mut value).cast()) }.and(Ok(value))
     }
 
     /// Read batch of registers
@@ -777,7 +777,7 @@ impl<'a, D> Unicorn<'a, D> {
         callback: F,
     ) -> Result<UcHookId, uc_error>
     where
-        F: FnMut(&mut Unicorn<D>, u64, u32) + 'a,
+        F: FnMut(&mut Unicorn<D, A>, u64, u32) + 'a,
     {
         let mut hook_id = 0;
         let mut user_data = Box::new(hook::UcHook {
@@ -790,7 +790,7 @@ impl<'a, D> Unicorn<'a, D> {
                 self.get_handle(),
                 (&raw mut hook_id).cast(),
                 HookType::CODE.0 as i32,
-                hook::code_hook_proxy::<D, F> as _,
+                hook::code_hook_proxy::<D, F, A> as _,
                 core::ptr::from_mut(user_data.as_mut()).cast(),
                 begin,
                 end,
@@ -811,7 +811,7 @@ impl<'a, D> Unicorn<'a, D> {
         callback: F,
     ) -> Result<UcHookId, uc_error>
     where
-        F: FnMut(&mut Unicorn<D>, u64, u32) + 'a,
+        F: FnMut(&mut Unicorn<D, A>, u64, u32) + 'a,
     {
         let mut hook_id = 0;
         let mut user_data = Box::new(hook::UcHook {
@@ -824,7 +824,7 @@ impl<'a, D> Unicorn<'a, D> {
                 self.get_handle(),
                 (&raw mut hook_id).cast(),
                 HookType::BLOCK.0 as i32,
-                hook::block_hook_proxy::<D, F> as _,
+                hook::block_hook_proxy::<D, F, A> as _,
                 core::ptr::from_mut(user_data.as_mut()).cast(),
                 begin,
                 end,
@@ -846,7 +846,7 @@ impl<'a, D> Unicorn<'a, D> {
         callback: F,
     ) -> Result<UcHookId, uc_error>
     where
-        F: FnMut(&mut Unicorn<D>, MemType, u64, usize, i64) -> bool + 'a,
+        F: FnMut(&mut Unicorn<D, A>, MemType, u64, usize, i64) -> bool + 'a,
     {
         if hook_type & (HookType::MEM_ALL | HookType::MEM_READ_AFTER) != hook_type {
             return Err(uc_error::ARG);
@@ -863,7 +863,7 @@ impl<'a, D> Unicorn<'a, D> {
                 self.get_handle(),
                 (&raw mut hook_id).cast(),
                 hook_type.0 as i32,
-                hook::mem_hook_proxy::<D, F> as _,
+                hook::mem_hook_proxy::<D, F, A> as _,
                 core::ptr::from_mut(user_data.as_mut()).cast(),
                 begin,
                 end,
@@ -879,7 +879,7 @@ impl<'a, D> Unicorn<'a, D> {
     /// Add an interrupt hook.
     pub fn add_intr_hook<F>(&mut self, callback: F) -> Result<UcHookId, uc_error>
     where
-        F: FnMut(&mut Unicorn<D>, u32) + 'a,
+        F: FnMut(&mut Unicorn<D, A>, u32) + 'a,
     {
         let mut hook_id = 0;
         let mut user_data = Box::new(hook::UcHook {
@@ -892,7 +892,7 @@ impl<'a, D> Unicorn<'a, D> {
                 self.get_handle(),
                 (&raw mut hook_id).cast(),
                 HookType::INTR.0 as i32,
-                hook::intr_hook_proxy::<D, F> as _,
+                hook::intr_hook_proxy::<D, F, A> as _,
                 core::ptr::from_mut(user_data.as_mut()).cast(),
                 0,
                 0,
@@ -908,7 +908,7 @@ impl<'a, D> Unicorn<'a, D> {
     /// Add hook for invalid instructions
     pub fn add_insn_invalid_hook<F>(&mut self, callback: F) -> Result<UcHookId, uc_error>
     where
-        F: FnMut(&mut Unicorn<D>) -> bool + 'a,
+        F: FnMut(&mut Unicorn<D, A>) -> bool + 'a,
     {
         let mut hook_id = 0;
         let mut user_data = Box::new(hook::UcHook {
@@ -921,7 +921,7 @@ impl<'a, D> Unicorn<'a, D> {
                 self.get_handle(),
                 (&raw mut hook_id).cast(),
                 HookType::INSN_INVALID.0 as i32,
-                hook::insn_invalid_hook_proxy::<D, F> as _,
+                hook::insn_invalid_hook_proxy::<D, F, A> as _,
                 core::ptr::from_mut(user_data.as_mut()).cast(),
                 0,
                 0,
@@ -938,7 +938,7 @@ impl<'a, D> Unicorn<'a, D> {
     #[cfg(feature = "arch_x86")]
     pub fn add_insn_in_hook<F>(&mut self, callback: F) -> Result<UcHookId, uc_error>
     where
-        F: FnMut(&mut Unicorn<D>, u32, usize) -> u32 + 'a,
+        F: FnMut(&mut Unicorn<D, A>, u32, usize) -> u32 + 'a,
     {
         let mut hook_id = 0;
         let mut user_data = Box::new(hook::UcHook {
@@ -951,7 +951,7 @@ impl<'a, D> Unicorn<'a, D> {
                 self.get_handle(),
                 (&raw mut hook_id).cast(),
                 HookType::INSN.0 as i32,
-                hook::insn_in_hook_proxy::<D, F> as _,
+                hook::insn_in_hook_proxy::<D, F, A> as _,
                 core::ptr::from_mut(user_data.as_mut()).cast(),
                 0,
                 0,
@@ -969,7 +969,7 @@ impl<'a, D> Unicorn<'a, D> {
     #[cfg(feature = "arch_x86")]
     pub fn add_insn_out_hook<F>(&mut self, callback: F) -> Result<UcHookId, uc_error>
     where
-        F: FnMut(&mut Unicorn<D>, u32, usize, u32) + 'a,
+        F: FnMut(&mut Unicorn<D, A>, u32, usize, u32) + 'a,
     {
         let mut hook_id = 0;
         let mut user_data = Box::new(hook::UcHook {
@@ -982,7 +982,7 @@ impl<'a, D> Unicorn<'a, D> {
                 self.get_handle(),
                 (&raw mut hook_id).cast(),
                 HookType::INSN.0 as i32,
-                hook::insn_out_hook_proxy::<D, F> as _,
+                hook::insn_out_hook_proxy::<D, F, A> as _,
                 core::ptr::from_mut(user_data.as_mut()).cast(),
                 0,
                 0,
@@ -1006,7 +1006,7 @@ impl<'a, D> Unicorn<'a, D> {
         callback: F,
     ) -> Result<UcHookId, uc_error>
     where
-        F: FnMut(&mut Unicorn<D>) + 'a,
+        F: FnMut(&mut Unicorn<D, A>) + 'a,
     {
         let mut hook_id = 0;
         let mut user_data = Box::new(hook::UcHook {
@@ -1019,7 +1019,7 @@ impl<'a, D> Unicorn<'a, D> {
                 self.get_handle(),
                 (&raw mut hook_id).cast(),
                 HookType::INSN.0 as i32,
-                hook::insn_sys_hook_proxy::<D, F> as _,
+                hook::insn_sys_hook_proxy::<D, F, A> as _,
                 core::ptr::from_mut(user_data.as_mut()).cast(),
                 begin,
                 end,
@@ -1046,7 +1046,7 @@ impl<'a, D> Unicorn<'a, D> {
         callback: F,
     ) -> Result<UcHookId, uc_error>
     where
-        F: FnMut(&mut Unicorn<D>, RegisterARM64, &RegisterARM64CP) -> bool + 'a,
+        F: FnMut(&mut Unicorn<D, A>, RegisterARM64, &RegisterARM64CP) -> bool + 'a,
     {
         let mut hook_id = 0;
         let mut user_data = Box::new(hook::UcHook {
@@ -1059,7 +1059,7 @@ impl<'a, D> Unicorn<'a, D> {
                 self.get_handle(),
                 (&raw mut hook_id).cast(),
                 HookType::INSN.0 as i32,
-                hook::insn_sys_hook_proxy_arm64::<D, F> as _,
+                hook::insn_sys_hook_proxy_arm64::<D, F, A> as _,
                 core::ptr::from_mut(user_data.as_mut()).cast(),
                 begin,
                 end,
@@ -1080,7 +1080,7 @@ impl<'a, D> Unicorn<'a, D> {
         callback: F,
     ) -> Result<UcHookId, uc_error>
     where
-        F: FnMut(&mut Unicorn<D>, u64, MemType) -> Option<TlbEntry> + 'a,
+        F: FnMut(&mut Unicorn<D, A>, u64, MemType) -> Option<TlbEntry> + 'a,
     {
         let mut hook_id = 0;
         let mut user_data = Box::new(hook::UcHook {
@@ -1093,7 +1093,7 @@ impl<'a, D> Unicorn<'a, D> {
                 self.get_handle(),
                 (&raw mut hook_id).cast(),
                 HookType::TLB_FILL.0 as i32,
-                hook::tlb_lookup_hook_proxy::<D, F> as _,
+                hook::tlb_lookup_hook_proxy::<D, F, A> as _,
                 core::ptr::from_mut(user_data.as_mut()).cast(),
                 begin,
                 end,
@@ -1115,7 +1115,7 @@ impl<'a, D> Unicorn<'a, D> {
         callback: F,
     ) -> Result<UcHookId, uc_error>
     where
-        F: FnMut(&mut Unicorn<D>, u64, u64, u64, usize) + 'a,
+        F: FnMut(&mut Unicorn<D, A>, u64, u64, u64, usize) + 'a,
     {
         let mut hook_id = 0;
         let mut user_data = Box::new(hook::UcHook {
@@ -1128,7 +1128,7 @@ impl<'a, D> Unicorn<'a, D> {
                 self.get_handle(),
                 (&raw mut hook_id).cast(),
                 HookType::TCG_OPCODE.0 as i32,
-                hook::tcg_proxy::<D, F> as _,
+                hook::tcg_proxy::<D, F, A> as _,
                 core::ptr::from_mut(user_data.as_mut()).cast(),
                 begin,
                 end,
@@ -1153,7 +1153,7 @@ impl<'a, D> Unicorn<'a, D> {
         callback: F,
     ) -> Result<UcHookId, uc_error>
     where
-        F: FnMut(&mut Unicorn<D>, &mut TranslationBlock, &mut TranslationBlock) + 'a,
+        F: FnMut(&mut Unicorn<D, A>, &mut TranslationBlock, &mut TranslationBlock) + 'a,
     {
         let mut hook_id = 0;
         let mut user_data = Box::new(hook::UcHook {
@@ -1166,7 +1166,7 @@ impl<'a, D> Unicorn<'a, D> {
                 self.get_handle(),
                 (&raw mut hook_id).cast(),
                 HookType::EDGE_GENERATED.0 as i32,
-                hook::edge_gen_hook_proxy::<D, F> as _,
+                hook::edge_gen_hook_proxy::<D, F, A> as _,
                 core::ptr::from_mut(user_data.as_mut()).cast(),
                 begin,
                 end,
@@ -1266,56 +1266,18 @@ impl<'a, D> Unicorn<'a, D> {
         unsafe { uc_query(self.get_handle(), query, &mut result) }.and(Ok(result))
     }
 
-    /// Get the `i32` register value for the program counter for the specified architecture.
-    ///
-    /// If an architecture is not compiled in, this function will return `uc_error::ARCH`.
-    const fn arch_to_pc_register(arch: Arch, mode: Mode) -> Result<i32, uc_error> {
-        match arch {
-            #[cfg(feature = "arch_x86")]
-            Arch::X86 => match mode {
-                Mode::MODE_16 => Ok(RegisterX86::IP as _),
-                Mode::MODE_32 => Ok(RegisterX86::EIP as _),
-                Mode::MODE_64 => Ok(RegisterX86::RIP as _),
-                _ => Err(uc_error::ARCH),
-            },
-            #[cfg(feature = "arch_arm")]
-            Arch::ARM => Ok(RegisterARM::PC as i32),
-            #[cfg(feature = "arch_arm")]
-            Arch::ARM64 => Ok(RegisterARM64::PC as i32),
-            #[cfg(feature = "arch_mips")]
-            Arch::MIPS => Ok(RegisterMIPS::PC as i32),
-            #[cfg(feature = "arch_sparc")]
-            Arch::SPARC => Ok(RegisterSPARC::PC as i32),
-            #[cfg(feature = "arch_m68k")]
-            Arch::M68K => Ok(RegisterM68K::PC as i32),
-            #[cfg(feature = "arch_ppc")]
-            Arch::PPC => Ok(RegisterPPC::PC as i32),
-            #[cfg(feature = "arch_riscv")]
-            Arch::RISCV => Ok(RegisterRISCV::PC as i32),
-            #[cfg(feature = "arch_s390x")]
-            Arch::S390X => Ok(RegisterS390X::PC as i32),
-            #[cfg(feature = "arch_tricore")]
-            Arch::TRICORE => Ok(RegisterTRICORE::PC as i32),
-            // returns `uc_error::ARCH` for `Arch::MAX`, and any
-            // other architecture that are not compiled in
-            _ => Err(uc_error::ARCH),
-        }
-    }
-
     /// Gets the current program counter for this `unicorn` instance.
     pub fn pc_read(&self) -> Result<u64, uc_error> {
-        let arch = self.get_arch();
         let mode = self.ctl_get_mode()?;
 
-        self.reg_read(Self::arch_to_pc_register(arch, mode)?)
+        self.reg_read(A::Reg::pc(mode)?)
     }
 
     /// Sets the program counter for this `unicorn` instance.
     pub fn set_pc(&mut self, value: u64) -> Result<(), uc_error> {
-        let arch = self.get_arch();
         let mode = self.ctl_get_mode()?;
 
-        self.reg_write(Self::arch_to_pc_register(arch, mode)?, value)
+        self.reg_write(A::Reg::pc(mode)?, value)
     }
 
     pub fn ctl_get_mode(&self) -> Result<Mode, uc_error> {

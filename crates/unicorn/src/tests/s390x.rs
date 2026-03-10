@@ -1,5 +1,7 @@
 use unicorn_engine_sys::RegisterS390X;
 
+use crate::arch::s390x::S390X;
+
 use super::*;
 
 #[test]
@@ -10,7 +12,7 @@ fn test_s390x_lr() {
 
     let r3 = 0x114514;
 
-    let mut uc = uc_common_setup(Arch::S390X, Mode::BIG_ENDIAN, None, &code, ());
+    let mut uc = uc_common_setup::<_, S390X>(Mode::BIG_ENDIAN, None, &code, ());
 
     uc.reg_write(RegisterS390X::R3, r3).unwrap();
 

@@ -1,18 +1,19 @@
 use unicorn_engine_sys::RegisterMIPS;
 
+use crate::arch::mips::Mips;
+
 use super::*;
 
 const CODE_START: u64 = 0x10000000;
 const CODE_LEN: u64 = 0x4000;
 
-fn uc_common_setup<T>(
-    arch: Arch,
+fn uc_common_setup<T, A: UcArch>(
     mode: Mode,
     cpu_model: Option<i32>,
     code: &[u8],
     data: T,
-) -> Unicorn<'_, T> {
-    let mut uc = Unicorn::new_with_data(arch, mode, data).unwrap();
+) -> Unicorn<'_, T, A> {
+    let mut uc = Unicorn::new_with_data(mode, data).unwrap();
     if let Some(cpu_model) = cpu_model {
         uc.ctl_set_cpu_model(cpu_model).unwrap();
     }
@@ -28,13 +29,7 @@ fn test_mips_el_ori() {
     ];
     let r1 = 0x6789;
 
-    let mut uc = uc_common_setup(
-        Arch::MIPS,
-        Mode::MIPS32 | Mode::LITTLE_ENDIAN,
-        None,
-        &code,
-        (),
-    );
+    let mut uc = uc_common_setup::<_, Mips>(Mode::MIPS32 | Mode::LITTLE_ENDIAN, None, &code, ());
 
     uc.reg_write(RegisterMIPS::R1, r1).unwrap();
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
@@ -50,7 +45,7 @@ fn test_mips_eb_ori() {
     ];
     let r1 = 0x6789;
 
-    let mut uc = uc_common_setup(Arch::MIPS, Mode::MIPS32 | Mode::BIG_ENDIAN, None, &code, ());
+    let mut uc = uc_common_setup::<_, Mips>(Mode::MIPS32 | Mode::BIG_ENDIAN, None, &code, ());
 
     uc.reg_write(RegisterMIPS::R1, r1).unwrap();
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
@@ -67,13 +62,7 @@ fn test_mips_stop_at_branch() {
     ];
     let v1 = 5;
 
-    let mut uc = uc_common_setup(
-        Arch::MIPS,
-        Mode::MIPS32 | Mode::LITTLE_ENDIAN,
-        None,
-        &code,
-        (),
-    );
+    let mut uc = uc_common_setup::<_, Mips>(Mode::MIPS32 | Mode::LITTLE_ENDIAN, None, &code, ());
 
     uc.reg_write(RegisterMIPS::V1, v1).unwrap();
 
@@ -98,13 +87,7 @@ fn test_mips_stop_at_delay_slot() {
         0x00, 0x00, 0x00, 0x00, // nop
     ];
 
-    let mut uc = uc_common_setup(
-        Arch::MIPS,
-        Mode::MIPS32 | Mode::LITTLE_ENDIAN,
-        None,
-        &code,
-        (),
-    );
+    let mut uc = uc_common_setup::<_, Mips>(Mode::MIPS32 | Mode::LITTLE_ENDIAN, None, &code, ());
 
     // Stop at the delay slot by design.
     uc.emu_start(CODE_START, CODE_START + 4, 0, 0).unwrap();
@@ -132,7 +115,7 @@ fn test_mips_stop_at_delay_slot_2() {
     let v0 = 0xff;
     let a1 = 0x3;
 
-    let mut uc = uc_common_setup(Arch::MIPS, Mode::MIPS32 | Mode::BIG_ENDIAN, None, &code, ());
+    let mut uc = uc_common_setup::<_, Mips>(Mode::MIPS32 | Mode::BIG_ENDIAN, None, &code, ());
 
     uc.reg_write(RegisterMIPS::V0, v0).unwrap();
     uc.reg_write(RegisterMIPS::A1, a1).unwrap();
@@ -151,13 +134,7 @@ fn test_mips_lwx_exception_issue_1314() {
         0x0a, 0xc8, 0x79, 0x7e, // lwx $t9, $t9($s3)
     ];
 
-    let mut uc = uc_common_setup(
-        Arch::MIPS,
-        Mode::MIPS32 | Mode::LITTLE_ENDIAN,
-        None,
-        &code,
-        (),
-    );
+    let mut uc = uc_common_setup::<_, Mips>(Mode::MIPS32 | Mode::LITTLE_ENDIAN, None, &code, ());
     uc.mem_map(0x10000, 0x4000, Prot::ALL).unwrap();
 
     // Enable DSP
@@ -189,13 +166,7 @@ fn test_mips_mips16() {
     let v0 = 0x6789;
     let mips16_lowbit = 1;
 
-    let mut uc = uc_common_setup(
-        Arch::MIPS,
-        Mode::MIPS32 | Mode::LITTLE_ENDIAN,
-        None,
-        &code,
-        (),
-    );
+    let mut uc = uc_common_setup::<_, Mips>(Mode::MIPS32 | Mode::LITTLE_ENDIAN, None, &code, ());
 
     uc.reg_write(RegisterMIPS::V0, v0).unwrap();
     uc.emu_start(
@@ -218,7 +189,7 @@ fn test_mips_mips_fpr() {
         0x00, 0x08, 0x89, 0x44,                         // mtc1 $t1, $f1
     ];
 
-    let mut uc = uc_common_setup(Arch::MIPS, Mode::MIPS32, None, &code, ());
+    let mut uc = uc_common_setup::<_, Mips>(Mode::MIPS32, None, &code, ());
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 

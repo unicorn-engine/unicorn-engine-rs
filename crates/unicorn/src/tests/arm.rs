@@ -1,5 +1,7 @@
 use super::*;
-use crate::{ArmCpuModel, RegisterARM, RegisterARMCP, TcgOpCode, TcgOpFlag, uc_error};
+use crate::{
+    ArmCpuModel, RegisterARM, RegisterARMCP, TcgOpCode, TcgOpFlag, arch::arm::Arm, uc_error,
+};
 
 #[test]
 fn test_arm_nop() {
@@ -7,7 +9,7 @@ fn test_arm_nop() {
     let r0 = 0x1234;
     let r1 = 0x5678;
 
-    let mut uc = uc_common_setup(Arch::ARM, Mode::ARM, None, code, ());
+    let mut uc = uc_common_setup::<_, Arm>(Mode::ARM, None, code, ());
     uc.reg_write(RegisterARM::R0, r0).unwrap();
     uc.reg_write(RegisterARM::R1, r1).unwrap();
 
@@ -25,13 +27,8 @@ fn test_arm_thumb_sub() {
     let code = b"\x83\xb0"; // sub sp, #0xc
     let sp = 0x1234;
 
-    let mut uc = uc_common_setup(
-        Arch::ARM,
-        Mode::THUMB,
-        Some(ArmCpuModel::CORTEX_A15 as i32),
-        code,
-        (),
-    );
+    let mut uc =
+        uc_common_setup::<_, Arm>(Mode::THUMB, Some(ArmCpuModel::CORTEX_A15 as i32), code, ());
     uc.reg_write(RegisterARM::SP, sp).unwrap();
 
     uc.emu_start(CODE_START | 1, CODE_START + code.len() as u64, 0, 0)
@@ -51,8 +48,7 @@ fn test_armeb_sub() {
     let r2 = 0x6789;
     let r3 = 0x3333;
 
-    let mut uc = uc_common_setup(
-        Arch::ARM,
+    let mut uc = uc_common_setup::<_, Arm>(
         Mode::ARM | Mode::BIG_ENDIAN,
         Some(ArmCpuModel::Model_1176 as i32),
         code,
@@ -86,8 +82,7 @@ fn test_armeb_be8_sub() {
     let r2 = 0x6789;
     let r3 = 0x3333;
 
-    let mut uc = uc_common_setup(
-        Arch::ARM,
+    let mut uc = uc_common_setup::<_, Arm>(
         Mode::ARM | Mode::ARMBE8,
         Some(ArmCpuModel::CORTEX_A15 as i32),
         code,
@@ -116,8 +111,7 @@ fn test_arm_thumbeb_sub() {
     let code = b"\xb0\x83"; // sub sp, #0xc
     let sp = 0x1234;
 
-    let mut uc = uc_common_setup(
-        Arch::ARM,
+    let mut uc = uc_common_setup::<_, Arm>(
         Mode::THUMB | Mode::BIG_ENDIAN,
         Some(ArmCpuModel::Model_1176 as i32),
         code,
@@ -148,8 +142,7 @@ fn test_arm_thumb_ite() {
     let mut pc = CODE_START as u32;
     let mut count = 0;
 
-    let mut uc = uc_common_setup(
-        Arch::ARM,
+    let mut uc = uc_common_setup::<_, Arm>(
         Mode::THUMB,
         Some(ArmCpuModel::CORTEX_A15 as i32),
         code,
@@ -214,8 +207,7 @@ fn test_arm_m_thumb_mrs() {
     let control = 0b10;
     let apsr = (0b10101 << 27) as u32;
 
-    let mut uc = uc_common_setup(
-        Arch::ARM,
+    let mut uc = uc_common_setup::<_, Arm>(
         Mode::THUMB | Mode::MCLASS,
         Some(ArmCpuModel::CORTEX_A15 as i32),
         code,
@@ -237,7 +229,7 @@ fn test_arm_m_thumb_mrs() {
 
 #[test]
 fn test_arm_m_control() {
-    let mut uc = Unicorn::new(Arch::ARM, Mode::THUMB | Mode::MCLASS).unwrap();
+    let mut uc = Unicorn::<_, Arm>::new(Mode::THUMB | Mode::MCLASS).unwrap();
     let mut control = 0;
     uc.reg_write(RegisterARM::CONTROL, control as u64).unwrap();
 
@@ -271,8 +263,7 @@ fn test_arm_m_exc_return() {
     let ipsr = 16;
     let mut sp = 0x8000;
 
-    let mut uc = uc_common_setup(
-        Arch::ARM,
+    let mut uc = uc_common_setup::<_, Arm>(
         Mode::THUMB | Mode::MCLASS,
         Some(ArmCpuModel::CORTEX_A15 as i32),
         code,
@@ -311,13 +302,8 @@ fn test_arm_und32_to_svc32() {
     let spsr = 0x40000093; // Save previous CPSR
     let lr = CODE_START + 8;
 
-    let mut uc = uc_common_setup(
-        Arch::ARM,
-        Mode::ARM,
-        Some(ArmCpuModel::CORTEX_A9 as i32),
-        code,
-        (),
-    );
+    let mut uc =
+        uc_common_setup::<_, Arm>(Mode::ARM, Some(ArmCpuModel::CORTEX_A9 as i32), code, ());
 
     uc.reg_write(RegisterARM::CPSR, cpsr as u64).unwrap();
     uc.reg_write(RegisterARM::SP, sp as u64).unwrap();
@@ -337,7 +323,7 @@ fn test_arm_und32_to_svc32() {
 
 #[test]
 fn test_arm_usr32_to_svc32() {
-    let mut uc = Unicorn::new(Arch::ARM, Mode::ARM).unwrap();
+    let mut uc = Unicorn::<_, Arm>::new(Mode::ARM).unwrap();
     uc.ctl_set_cpu_model(ArmCpuModel::CORTEX_A9 as i32).unwrap();
 
     // https://www.keil.com/pack/doc/CMSIS/Core_A/html/group__CMSIS__CPSR__M.html
@@ -386,13 +372,8 @@ fn test_arm_v8() {
     let r0 = 0x8000;
     let r1 = 0xdeadbeefu32;
 
-    let mut uc = uc_common_setup(
-        Arch::ARM,
-        Mode::THUMB,
-        Some(ArmCpuModel::CORTEX_M33 as i32),
-        code,
-        (),
-    );
+    let mut uc =
+        uc_common_setup::<_, Arm>(Mode::THUMB, Some(ArmCpuModel::CORTEX_M33 as i32), code, ());
 
     uc.mem_map(r0, 0x1000, Prot::ALL).unwrap();
     uc.mem_write(r0, &r1.to_le_bytes()).unwrap();
@@ -412,13 +393,8 @@ fn test_arm_thumb_smlabb() {
     let r2 = 9;
     let r3 = 5;
 
-    let mut uc = uc_common_setup(
-        Arch::ARM,
-        Mode::THUMB,
-        Some(ArmCpuModel::CORTEX_M7 as i32),
-        code,
-        (),
-    );
+    let mut uc =
+        uc_common_setup::<_, Arm>(Mode::THUMB, Some(ArmCpuModel::CORTEX_M7 as i32), code, ());
 
     uc.reg_write(RegisterARM::R1, r1 as u64).unwrap();
     uc.reg_write(RegisterARM::R2, r2 as u64).unwrap();
@@ -445,13 +421,8 @@ fn test_arm_not_allow_privilege_escalation() {
     let sp = 0x12345678;
     let lr = 0x00102220;
 
-    let mut uc = uc_common_setup(
-        Arch::ARM,
-        Mode::ARM,
-        Some(ArmCpuModel::CORTEX_A15 as i32),
-        code,
-        (),
-    );
+    let mut uc =
+        uc_common_setup::<_, Arm>(Mode::ARM, Some(ArmCpuModel::CORTEX_A15 as i32), code, ());
 
     uc.reg_write(RegisterARM::CPSR, cpsr as u64).unwrap();
     uc.reg_write(RegisterARM::SP, sp as u64).unwrap();
@@ -482,7 +453,7 @@ fn test_arm_not_allow_privilege_escalation() {
 fn test_arm_mrc() {
     let code = b"\x1d\xee\x70\x1f"; // mrc p15, #0, r1, c13, c0, #3
 
-    let mut uc = uc_common_setup(Arch::ARM, Mode::THUMB, None, code, ());
+    let mut uc = uc_common_setup::<_, Arm>(Mode::THUMB, None, code, ());
 
     uc.emu_start(CODE_START | 1, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
@@ -502,13 +473,8 @@ fn test_arm_hflags_rebuilt() {
     let sp = 0x12345678;
     let lr = 0x00102220;
 
-    let mut uc = uc_common_setup(
-        Arch::ARM,
-        Mode::ARM,
-        Some(ArmCpuModel::CORTEX_A9 as i32),
-        code,
-        (),
-    );
+    let mut uc =
+        uc_common_setup::<_, Arm>(Mode::ARM, Some(ArmCpuModel::CORTEX_A9 as i32), code, ());
 
     uc.reg_write(RegisterARM::CPSR, cpsr as u64).unwrap();
     uc.reg_write(RegisterARM::SP, sp as u64).unwrap();
@@ -554,13 +520,7 @@ fn test_arm_mem_access_abort() {
     ];
     let r0 = 0x990000;
 
-    let mut uc = uc_common_setup(
-        Arch::ARM,
-        Mode::ARM,
-        Some(ArmCpuModel::CORTEX_A9 as i32),
-        code,
-        0,
-    );
+    let mut uc = uc_common_setup::<_, Arm>(Mode::ARM, Some(ArmCpuModel::CORTEX_A9 as i32), code, 0);
 
     uc.reg_write(RegisterARM::R0, r0 as u64).unwrap();
 
@@ -599,7 +559,7 @@ fn test_arm_mem_access_abort() {
 
 #[test]
 fn test_arm_read_sctlr() {
-    let uc = Unicorn::new(Arch::ARM, Mode::ARM).unwrap();
+    let uc = Unicorn::<_, Arm>::new(Mode::ARM).unwrap();
     let mut reg = RegisterARMCP::new().cp(15).crn(1);
     uc.reg_read_arm_coproc(&mut reg).unwrap();
     assert_eq!((reg.val >> 31) & 1, 0);
@@ -607,7 +567,7 @@ fn test_arm_read_sctlr() {
 
 #[test]
 fn test_arm_be_cpsr_sctlr() {
-    let mut uc = Unicorn::new(Arch::ARM, Mode::ARM | Mode::BIG_ENDIAN).unwrap();
+    let mut uc = Unicorn::<_, Arm>::new(Mode::ARM | Mode::BIG_ENDIAN).unwrap();
     uc.ctl_set_cpu_model(ArmCpuModel::Model_1176 as i32)
         .unwrap();
 
@@ -618,7 +578,7 @@ fn test_arm_be_cpsr_sctlr() {
     assert_ne!(reg.val & (1 << 7), 0);
     assert_ne!(cpsr & (1 << 9), 0);
 
-    let mut uc = Unicorn::new(Arch::ARM, Mode::ARM | Mode::ARMBE8).unwrap();
+    let mut uc = Unicorn::<_, Arm>::new(Mode::ARM | Mode::ARMBE8).unwrap();
     uc.ctl_set_cpu_model(ArmCpuModel::CORTEX_A15 as i32)
         .unwrap();
 
@@ -635,13 +595,8 @@ fn test_arm_be_cpsr_sctlr() {
 fn test_arm_switch_endian() {
     let code = b"\x00\x00\x91\xe5"; // ldr r0, [r1]
 
-    let mut uc = uc_common_setup(
-        Arch::ARM,
-        Mode::ARM,
-        Some(ArmCpuModel::CORTEX_A15 as i32),
-        code,
-        (),
-    );
+    let mut uc =
+        uc_common_setup::<_, Arm>(Mode::ARM, Some(ArmCpuModel::CORTEX_A15 as i32), code, ());
 
     let r1 = CODE_START;
     uc.reg_write(RegisterARM::R1, r1).unwrap();
@@ -670,8 +625,7 @@ fn test_armeb_ldrb() {
     let code = b"\xe5\xd2\x10\x00"; // ldrb r1, [r2]
     let data_address = 0x800000;
 
-    let mut uc = uc_common_setup(
-        Arch::ARM,
+    let mut uc = uc_common_setup::<_, Arm>(
         Mode::ARM | Mode::BIG_ENDIAN,
         Some(ArmCpuModel::Model_1176 as i32),
         code,
@@ -714,13 +668,7 @@ fn test_armeb_ldrb() {
 fn test_arm_context_save() {
     let code = b"\x83\xb0"; // sub sp, #0xc
 
-    let uc = uc_common_setup(
-        Arch::ARM,
-        Mode::THUMB,
-        Some(ArmCpuModel::CORTEX_R5 as i32),
-        code,
-        (),
-    );
+    let uc = uc_common_setup::<_, Arm>(Mode::THUMB, Some(ArmCpuModel::CORTEX_R5 as i32), code, ());
 
     let mut context = uc.context_alloc().unwrap();
     uc.context_save(&mut context).unwrap();
@@ -729,8 +677,7 @@ fn test_arm_context_save() {
     context.reg_write(RegisterARM::PC, pc).unwrap();
     uc.context_restore(&context).unwrap();
 
-    let uc2 = uc_common_setup(
-        Arch::ARM,
+    let uc2 = uc_common_setup::<_, Arm>(
         Mode::THUMB,
         Some(ArmCpuModel::CORTEX_A7 as i32), // NOTE: different CPU model
         code,
@@ -750,8 +697,7 @@ fn test_arm_thumb2() {
         0x00, 0xF0, 0x04, 0x00, // AND.W R0, R0, #4
     ];
 
-    let mut uc = uc_common_setup(
-        Arch::ARM,
+    let mut uc = uc_common_setup::<_, Arm>(
         Mode::THUMB | Mode::LITTLE_ENDIAN,
         Some(ArmCpuModel::CORTEX_R5 as i32),
         code,
@@ -773,8 +719,7 @@ fn test_armeb_be32_thumb2() {
         0xF0, 0x00, 0x00, 0x04, // AND.W R0, R0, #4
     ];
 
-    let mut uc = uc_common_setup(
-        Arch::ARM,
+    let mut uc = uc_common_setup::<_, Arm>(
         Mode::THUMB | Mode::BIG_ENDIAN,
         Some(ArmCpuModel::CORTEX_R5 as i32),
         code,
@@ -800,8 +745,7 @@ fn test_arm_mem_hook_read_write() {
 
     let sp = 0x9000;
 
-    let mut uc = uc_common_setup(
-        Arch::ARM,
+    let mut uc = uc_common_setup::<_, Arm>(
         Mode::ARM,
         Some(ArmCpuModel::CORTEX_A15 as i32),
         code,
@@ -839,7 +783,13 @@ struct CmpInfo {
     pc: u64,
 }
 
-fn uc_hook_sub_cmp(uc: &mut Unicorn<'_, CmpInfo>, address: u64, arg1: u64, arg2: u64, size: usize) {
+fn uc_hook_sub_cmp(
+    uc: &mut Unicorn<'_, CmpInfo, Arm>,
+    address: u64,
+    arg1: u64,
+    arg2: u64,
+    size: usize,
+) {
     let data = uc.get_data_mut();
     data.pc = address;
     data.size = size as u64;
@@ -857,8 +807,7 @@ fn test_arm_tcg_opcode_cmp() {
         0x03, 0x00, 0x00, 0x00, // (3)
     ];
 
-    let mut uc = uc_common_setup(
-        Arch::ARM,
+    let mut uc = uc_common_setup::<_, Arm>(
         Mode::ARM,
         Some(ArmCpuModel::CORTEX_A15 as i32),
         code,
@@ -890,8 +839,7 @@ fn test_arm_thumb_tcg_opcode_cmn() {
         0x03, 0x00, 0x00, 0x00, // (3)
     ];
 
-    let mut uc = uc_common_setup(
-        Arch::ARM,
+    let mut uc = uc_common_setup::<_, Arm>(
         Mode::THUMB,
         Some(ArmCpuModel::CORTEX_A15 as i32),
         code,
@@ -916,7 +864,7 @@ fn test_arm_cp15_c1_c0_2() {
     let val = 0x12345678;
 
     // Initialize emulator in ARM mode
-    let mut uc = Unicorn::new(Arch::ARM, Mode::ARM).unwrap();
+    let mut uc = Unicorn::<_, Arm>::new(Mode::ARM).unwrap();
     uc.ctl_set_cpu_model(ArmCpuModel::CORTEX_A15 as i32)
         .unwrap();
 

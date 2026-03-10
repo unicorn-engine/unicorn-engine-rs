@@ -1,5 +1,7 @@
 use unicorn_engine_sys::RegisterPPC;
 
+use crate::arch::ppc::Ppc;
+
 use super::*;
 
 #[test]
@@ -10,7 +12,7 @@ fn test_ppc32_add() {
     let r3 = 42;
     let r6 = 1337;
 
-    let mut uc = uc_common_setup(Arch::PPC, Mode::PPC32 | Mode::BIG_ENDIAN, None, &code, ());
+    let mut uc = uc_common_setup::<_, Ppc>(Mode::PPC32 | Mode::BIG_ENDIAN, None, &code, ());
 
     uc.reg_write(RegisterPPC::R3, r3).unwrap();
     uc.reg_write(RegisterPPC::R6, r6).unwrap();
@@ -33,7 +35,7 @@ fn test_ppc32_fadd() {
     let fpr4 = 0xC053400000000000;
     let fpr5 = 0x400C000000000000;
 
-    let mut uc = uc_common_setup(Arch::PPC, Mode::PPC32 | Mode::BIG_ENDIAN, None, &code, ());
+    let mut uc = uc_common_setup::<_, Ppc>(Mode::PPC32 | Mode::BIG_ENDIAN, None, &code, ());
 
     msr |= 1 << 13; // Big endian
     uc.reg_write(RegisterPPC::MSR, msr).unwrap(); // enable FP
@@ -54,7 +56,7 @@ fn test_ppc32_sc() {
     let code = [
         0x44, 0x00, 0x00, 0x02, // sc
     ];
-    let mut uc = uc_common_setup(Arch::PPC, Mode::PPC32 | Mode::BIG_ENDIAN, None, &code, ());
+    let mut uc = uc_common_setup::<_, Ppc>(Mode::PPC32 | Mode::BIG_ENDIAN, None, &code, ());
 
     uc.add_intr_hook(|uc, _| uc.emu_stop().unwrap()).unwrap();
 
@@ -68,7 +70,7 @@ fn test_ppc32_sc() {
 
 #[test]
 fn test_ppc32_cr() {
-    let mut uc = uc_common_setup(Arch::PPC, Mode::PPC32 | Mode::BIG_ENDIAN, None, &[], ());
+    let mut uc = uc_common_setup::<_, Ppc>(Mode::PPC32 | Mode::BIG_ENDIAN, None, &[], ());
 
     let mut cr = 0x12345678;
     uc.reg_write(RegisterPPC::CR, cr).unwrap();
@@ -84,7 +86,7 @@ fn test_ppc32_spr_time() {
         0x7c, 0x6d, 0x42, 0xa6, // mfspr r3, TBUr
     ];
 
-    let mut uc = uc_common_setup(Arch::PPC, Mode::PPC32 | Mode::BIG_ENDIAN, None, &code, ());
+    let mut uc = uc_common_setup::<_, Ppc>(Mode::PPC32 | Mode::BIG_ENDIAN, None, &code, ());
 
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
