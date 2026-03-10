@@ -31,10 +31,10 @@ fn test_mips_el_ori() {
 
     let mut uc = uc_common_setup::<_, Mips>(Mode::MIPS32 | Mode::LITTLE_ENDIAN, None, &code, ());
 
-    uc.reg_write(RegisterMIPS::R1, r1).unwrap();
+    uc.reg_write(RegisterMIPS::R1, r1);
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
-    let r1 = uc.reg_read(RegisterMIPS::R1).unwrap();
+    let r1 = uc.reg_read(RegisterMIPS::R1);
     assert_eq!(r1, 0x77df);
 }
 
@@ -47,10 +47,10 @@ fn test_mips_eb_ori() {
 
     let mut uc = uc_common_setup::<_, Mips>(Mode::MIPS32 | Mode::BIG_ENDIAN, None, &code, ());
 
-    uc.reg_write(RegisterMIPS::R1, r1).unwrap();
+    uc.reg_write(RegisterMIPS::R1, r1);
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
-    let r1 = uc.reg_read(RegisterMIPS::R1).unwrap();
+    let r1 = uc.reg_read(RegisterMIPS::R1);
     assert_eq!(r1, 0x77df);
 }
 
@@ -64,14 +64,14 @@ fn test_mips_stop_at_branch() {
 
     let mut uc = uc_common_setup::<_, Mips>(Mode::MIPS32 | Mode::LITTLE_ENDIAN, None, &code, ());
 
-    uc.reg_write(RegisterMIPS::V1, v1).unwrap();
+    uc.reg_write(RegisterMIPS::V1, v1);
 
     // Execute one instruction with branch delay slot.
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 1)
         .unwrap();
 
-    let pc = uc.reg_read(RegisterMIPS::PC).unwrap();
-    let v1 = uc.reg_read(RegisterMIPS::V0).unwrap();
+    let pc = uc.reg_read(RegisterMIPS::PC);
+    let v1 = uc.reg_read(RegisterMIPS::V0);
 
     // Even if we just execute one instruction, the instruction in the
     // delay slot would also be executed.
@@ -92,7 +92,7 @@ fn test_mips_stop_at_delay_slot() {
     // Stop at the delay slot by design.
     uc.emu_start(CODE_START, CODE_START + 4, 0, 0).unwrap();
 
-    let pc = uc.reg_read(RegisterMIPS::PC).unwrap();
+    let pc = uc.reg_read(RegisterMIPS::PC);
 
     // The branch instruction isn't committed and the PC is not updated.
     // The user is responsible for restarting emulation at the branch instruction.
@@ -117,13 +117,13 @@ fn test_mips_stop_at_delay_slot_2() {
 
     let mut uc = uc_common_setup::<_, Mips>(Mode::MIPS32 | Mode::BIG_ENDIAN, None, &code, ());
 
-    uc.reg_write(RegisterMIPS::V0, v0).unwrap();
-    uc.reg_write(RegisterMIPS::A1, a1).unwrap();
+    uc.reg_write(RegisterMIPS::V0, v0);
+    uc.reg_write(RegisterMIPS::A1, a1);
     uc.emu_start(CODE_START, CODE_START + code.len() as u64 + 16, 0, 2)
         .unwrap();
 
-    let pc = uc.reg_read(RegisterMIPS::PC).unwrap();
-    let v0 = uc.reg_read(RegisterMIPS::V0).unwrap();
+    let pc = uc.reg_read(RegisterMIPS::PC);
+    let v0 = uc.reg_read(RegisterMIPS::V0);
     assert_eq!(pc, CODE_START + 4 + 0x1e8);
     assert_eq!(v0, 0xfc);
 }
@@ -139,22 +139,22 @@ fn test_mips_lwx_exception_issue_1314() {
 
     // Enable DSP
     // https://s3-eu-west-1.amazonaws.com/downloads-mips/documents/MD00090-2B-MIPS32PRA-AFP-06.02.pdf
-    let mut reg = uc.reg_read(RegisterMIPS::CP0_STATUS).unwrap();
+    let mut reg = uc.reg_read(RegisterMIPS::CP0_STATUS);
     reg |= 1 << 24;
-    uc.reg_write(RegisterMIPS::CP0_STATUS, reg).unwrap();
+    uc.reg_write(RegisterMIPS::CP0_STATUS, reg);
 
     reg = 0;
-    uc.reg_write(RegisterMIPS::R1, reg).unwrap();
-    uc.reg_write(RegisterMIPS::T9, reg).unwrap();
+    uc.reg_write(RegisterMIPS::R1, reg);
+    uc.reg_write(RegisterMIPS::T9, reg);
     reg = 0xdeadbeef;
     uc.mem_write(0x10000, &(reg as u32).to_le_bytes()).unwrap();
     reg = 0x10000;
-    uc.reg_write(RegisterMIPS::S3, reg).unwrap();
+    uc.reg_write(RegisterMIPS::S3, reg);
 
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    reg = uc.reg_read(RegisterMIPS::T9).unwrap();
+    reg = uc.reg_read(RegisterMIPS::T9);
     assert_eq!(reg, 0xdeadbeef);
 }
 
@@ -168,7 +168,7 @@ fn test_mips_mips16() {
 
     let mut uc = uc_common_setup::<_, Mips>(Mode::MIPS32 | Mode::LITTLE_ENDIAN, None, &code, ());
 
-    uc.reg_write(RegisterMIPS::V0, v0).unwrap();
+    uc.reg_write(RegisterMIPS::V0, v0);
     uc.emu_start(
         CODE_START | mips16_lowbit,
         CODE_START + code.len() as u64,
@@ -177,7 +177,7 @@ fn test_mips_mips16() {
     )
     .unwrap();
 
-    let v0 = uc.reg_read(RegisterMIPS::V0).unwrap();
+    let v0 = uc.reg_read(RegisterMIPS::V0);
     assert_eq!(v0, 0x684D);
 }
 
@@ -193,6 +193,6 @@ fn test_mips_mips_fpr() {
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let f1 = uc.reg_read(RegisterMIPS::F1).unwrap();
+    let f1 = uc.reg_read(RegisterMIPS::F1);
     assert_eq!(f1, 0x42f6e979);
 }

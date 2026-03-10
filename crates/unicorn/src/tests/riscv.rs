@@ -14,14 +14,14 @@ fn test_riscv32_nop() {
     let t1 = 0x5678;
 
     let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV32, None, &code, ());
-    uc.reg_write(RegisterRISCV::T0, t0).unwrap();
-    uc.reg_write(RegisterRISCV::T1, t1).unwrap();
+    uc.reg_write(RegisterRISCV::T0, t0);
+    uc.reg_write(RegisterRISCV::T1, t1);
 
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let t0 = uc.reg_read(RegisterRISCV::T0).unwrap();
-    let t1 = uc.reg_read(RegisterRISCV::T1).unwrap();
+    let t0 = uc.reg_read(RegisterRISCV::T0);
+    let t1 = uc.reg_read(RegisterRISCV::T1);
     assert_eq!(t0, 0x1234);
     assert_eq!(t1, 0x5678);
 }
@@ -36,14 +36,14 @@ fn test_riscv64_nop() {
     let t1 = 0x5678;
 
     let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV64, None, &code, ());
-    uc.reg_write(RegisterRISCV::T0, t0).unwrap();
-    uc.reg_write(RegisterRISCV::T1, t1).unwrap();
+    uc.reg_write(RegisterRISCV::T0, t0);
+    uc.reg_write(RegisterRISCV::T1, t1);
 
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let t0 = uc.reg_read(RegisterRISCV::T0).unwrap();
-    let t1 = uc.reg_read(RegisterRISCV::T1).unwrap();
+    let t0 = uc.reg_read(RegisterRISCV::T0);
+    let t1 = uc.reg_read(RegisterRISCV::T1);
     assert_eq!(t0, 0x1234);
     assert_eq!(t1, 0x5678);
 }
@@ -62,17 +62,17 @@ fn test_riscv32_until_pc_update() {
     let mut t1 = 0x7890;
     let mut sp = 0x1234;
 
-    uc.reg_write(RegisterRISCV::T0, t0).unwrap();
-    uc.reg_write(RegisterRISCV::T1, t1).unwrap();
-    uc.reg_write(RegisterRISCV::SP, sp).unwrap();
+    uc.reg_write(RegisterRISCV::T0, t0);
+    uc.reg_write(RegisterRISCV::T1, t1);
+    uc.reg_write(RegisterRISCV::SP, sp);
 
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    t0 = uc.reg_read(RegisterRISCV::T0).unwrap();
-    t1 = uc.reg_read(RegisterRISCV::T1).unwrap();
-    sp = uc.reg_read(RegisterRISCV::SP).unwrap();
-    let pc = uc.reg_read(RegisterRISCV::PC).unwrap();
+    t0 = uc.reg_read(RegisterRISCV::T0);
+    t1 = uc.reg_read(RegisterRISCV::T1);
+    sp = uc.reg_read(RegisterRISCV::SP);
+    let pc = uc.reg_read(RegisterRISCV::PC);
 
     assert_eq!(t0, 0x1);
     assert_eq!(t1, 0x20);
@@ -95,17 +95,17 @@ fn test_riscv64_until_pc_update() {
     let mut t1 = 0x7890;
     let mut sp = 0x1234;
 
-    uc.reg_write(RegisterRISCV::T0, t0).unwrap();
-    uc.reg_write(RegisterRISCV::T1, t1).unwrap();
-    uc.reg_write(RegisterRISCV::SP, sp).unwrap();
+    uc.reg_write(RegisterRISCV::T0, t0);
+    uc.reg_write(RegisterRISCV::T1, t1);
+    uc.reg_write(RegisterRISCV::SP, sp);
 
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    t0 = uc.reg_read(RegisterRISCV::T0).unwrap();
-    t1 = uc.reg_read(RegisterRISCV::T1).unwrap();
-    sp = uc.reg_read(RegisterRISCV::SP).unwrap();
-    let pc = uc.reg_read(RegisterRISCV::PC).unwrap();
+    t0 = uc.reg_read(RegisterRISCV::T0);
+    t1 = uc.reg_read(RegisterRISCV::T1);
+    sp = uc.reg_read(RegisterRISCV::SP);
+    let pc = uc.reg_read(RegisterRISCV::PC);
 
     assert_eq!(t0, 0x1);
     assert_eq!(t1, 0x20);
@@ -128,16 +128,16 @@ fn test_riscv32_3steps_pc_update() {
     let mut t1 = 0x7890;
     let mut sp = 0x1234;
 
-    uc.reg_write(RegisterRISCV::T0, t0).unwrap();
-    uc.reg_write(RegisterRISCV::T1, t1).unwrap();
-    uc.reg_write(RegisterRISCV::SP, sp).unwrap();
+    uc.reg_write(RegisterRISCV::T0, t0);
+    uc.reg_write(RegisterRISCV::T1, t1);
+    uc.reg_write(RegisterRISCV::SP, sp);
 
     uc.emu_start(CODE_START, u64::MAX, 0, 3).unwrap();
 
-    t0 = uc.reg_read(RegisterRISCV::T0).unwrap();
-    t1 = uc.reg_read(RegisterRISCV::T1).unwrap();
-    sp = uc.reg_read(RegisterRISCV::SP).unwrap();
-    let pc = uc.reg_read(RegisterRISCV::PC).unwrap();
+    t0 = uc.reg_read(RegisterRISCV::T0);
+    t1 = uc.reg_read(RegisterRISCV::T1);
+    sp = uc.reg_read(RegisterRISCV::SP);
+    let pc = uc.reg_read(RegisterRISCV::PC);
 
     assert_eq!(t0, 0x1);
     assert_eq!(t1, 0x20);
@@ -160,16 +160,16 @@ fn test_riscv64_3steps_pc_update() {
     let mut t1 = 0x7890;
     let mut sp = 0x1234;
 
-    uc.reg_write(RegisterRISCV::T0, t0).unwrap();
-    uc.reg_write(RegisterRISCV::T1, t1).unwrap();
-    uc.reg_write(RegisterRISCV::SP, sp).unwrap();
+    uc.reg_write(RegisterRISCV::T0, t0);
+    uc.reg_write(RegisterRISCV::T1, t1);
+    uc.reg_write(RegisterRISCV::SP, sp);
 
     uc.emu_start(CODE_START, u64::MAX, 0, 3).unwrap();
 
-    t0 = uc.reg_read(RegisterRISCV::T0).unwrap();
-    t1 = uc.reg_read(RegisterRISCV::T1).unwrap();
-    sp = uc.reg_read(RegisterRISCV::SP).unwrap();
-    let pc = uc.reg_read(RegisterRISCV::PC).unwrap();
+    t0 = uc.reg_read(RegisterRISCV::T0);
+    t1 = uc.reg_read(RegisterRISCV::T1);
+    sp = uc.reg_read(RegisterRISCV::SP);
+    let pc = uc.reg_read(RegisterRISCV::PC);
 
     assert_eq!(t0, 0x1);
     assert_eq!(t1, 0x20);
@@ -189,13 +189,13 @@ fn test_riscv32_fp_move() {
 
     let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV32, None, &code, ());
 
-    uc.reg_write(RegisterRISCV::F1, f1).unwrap();
-    uc.reg_write(RegisterRISCV::F3, f3).unwrap();
+    uc.reg_write(RegisterRISCV::F1, f1);
+    uc.reg_write(RegisterRISCV::F3, f3);
 
     uc.emu_start(CODE_START, u64::MAX, 0, 1).unwrap();
 
-    f1 = uc.reg_read(RegisterRISCV::F1).unwrap();
-    f3 = uc.reg_read(RegisterRISCV::F3).unwrap();
+    f1 = uc.reg_read(RegisterRISCV::F1);
+    f3 = uc.reg_read(RegisterRISCV::F3);
 
     assert_eq!(f1, 0x123456781a2b3c4d);
     assert_eq!(f3, 0x123456781a2b3c4d);
@@ -212,13 +212,13 @@ fn test_riscv64_fp_move() {
 
     let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV64, None, &code, ());
 
-    uc.reg_write(RegisterRISCV::F1, f1).unwrap();
-    uc.reg_write(RegisterRISCV::F3, f3).unwrap();
+    uc.reg_write(RegisterRISCV::F1, f1);
+    uc.reg_write(RegisterRISCV::F3, f3);
 
     uc.emu_start(CODE_START, u64::MAX, 0, 1).unwrap();
 
-    f1 = uc.reg_read(RegisterRISCV::F1).unwrap();
-    f3 = uc.reg_read(RegisterRISCV::F3).unwrap();
+    f1 = uc.reg_read(RegisterRISCV::F1);
+    f3 = uc.reg_read(RegisterRISCV::F3);
 
     assert_eq!(f1, 0x123456781a2b3c4d);
     assert_eq!(f3, 0x123456781a2b3c4d);
@@ -237,16 +237,16 @@ fn test_riscv64_fp_move_from_int() {
 
     let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV64, None, &code, ());
 
-    uc.reg_write(RegisterRISCV::FT0, ft0).unwrap();
-    uc.reg_write(RegisterRISCV::S6, s6).unwrap();
+    uc.reg_write(RegisterRISCV::FT0, ft0);
+    uc.reg_write(RegisterRISCV::S6, s6);
 
     // mstatus.fs
-    uc.reg_write(RegisterRISCV::X3, x3).unwrap();
+    uc.reg_write(RegisterRISCV::X3, x3);
 
     uc.emu_start(CODE_START, u64::MAX, 0, 2).unwrap();
 
-    ft0 = uc.reg_read(RegisterRISCV::FT0).unwrap();
-    s6 = uc.reg_read(RegisterRISCV::S6).unwrap();
+    ft0 = uc.reg_read(RegisterRISCV::FT0);
+    s6 = uc.reg_read(RegisterRISCV::S6);
 
     assert_eq!(ft0, 0x56785678);
     assert_eq!(s6, 0x56785678);
@@ -264,16 +264,16 @@ fn test_riscv64_fp_move_from_int_reg_write() {
 
     let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV64, None, &code, ());
 
-    uc.reg_write(RegisterRISCV::FT0, ft0).unwrap();
-    uc.reg_write(RegisterRISCV::S6, s6).unwrap();
+    uc.reg_write(RegisterRISCV::FT0, ft0);
+    uc.reg_write(RegisterRISCV::S6, s6);
 
     // mstatus.fs
-    uc.reg_write(RegisterRISCV::MSTATUS, mstatus).unwrap();
+    uc.reg_write(RegisterRISCV::MSTATUS, mstatus);
 
     uc.emu_start(CODE_START, u64::MAX, 0, 1).unwrap();
 
-    ft0 = uc.reg_read(RegisterRISCV::FT0).unwrap();
-    s6 = uc.reg_read(RegisterRISCV::S6).unwrap();
+    ft0 = uc.reg_read(RegisterRISCV::FT0);
+    s6 = uc.reg_read(RegisterRISCV::S6);
 
     assert_eq!(ft0, 0x56785678);
     assert_eq!(s6, 0x56785678);
@@ -292,16 +292,16 @@ fn test_riscv64_fp_move_to_int() {
 
     let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV64, None, &code, ());
 
-    uc.reg_write(RegisterRISCV::FT0, ft0).unwrap();
-    uc.reg_write(RegisterRISCV::S6, s6).unwrap();
+    uc.reg_write(RegisterRISCV::FT0, ft0);
+    uc.reg_write(RegisterRISCV::S6, s6);
 
     // mstatus.fs
-    uc.reg_write(RegisterRISCV::X3, x3).unwrap();
+    uc.reg_write(RegisterRISCV::X3, x3);
 
     uc.emu_start(CODE_START, u64::MAX, 0, 2).unwrap();
 
-    ft0 = uc.reg_read(RegisterRISCV::FT0).unwrap();
-    s6 = uc.reg_read(RegisterRISCV::S6).unwrap();
+    ft0 = uc.reg_read(RegisterRISCV::FT0);
+    s6 = uc.reg_read(RegisterRISCV::S6);
 
     assert_eq!(ft0, 0x12341234);
     assert_eq!(s6, 0x12341234);
@@ -317,14 +317,14 @@ fn test_riscv64_code_patching() {
 
     // Zero out t0 and t1
     let mut t0 = 0x0;
-    uc.reg_write(RegisterRISCV::T0, t0).unwrap();
+    uc.reg_write(RegisterRISCV::T0, t0);
 
     // emulate the instruction
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
     // check value
-    t0 = uc.reg_read(RegisterRISCV::T0).unwrap();
+    t0 = uc.reg_read(RegisterRISCV::T0);
     assert_eq!(t0, 0x1);
 
     // patch instruction
@@ -335,12 +335,12 @@ fn test_riscv64_code_patching() {
 
     // zero out t0
     t0 = 0x0;
-    uc.reg_write(RegisterRISCV::T0, t0).unwrap();
+    uc.reg_write(RegisterRISCV::T0, t0);
     uc.emu_start(CODE_START, CODE_START + patch_code.len() as u64, 0, 0)
         .unwrap();
 
     // check value
-    t0 = uc.reg_read(RegisterRISCV::T0).unwrap();
+    t0 = uc.reg_read(RegisterRISCV::T0);
     assert_eq!(t0, 0x7ff);
 }
 
@@ -354,13 +354,13 @@ fn test_riscv64_code_patching_count() {
 
     // Zero out t0 and t1
     let mut t0 = 0x0;
-    uc.reg_write(RegisterRISCV::T0, t0).unwrap();
+    uc.reg_write(RegisterRISCV::T0, t0);
 
     // emulate the instruction
     uc.emu_start(CODE_START, u64::MAX, 0, 1).unwrap();
 
     // check value
-    t0 = uc.reg_read(RegisterRISCV::T0).unwrap();
+    t0 = uc.reg_read(RegisterRISCV::T0);
     assert_eq!(t0, 0x1);
 
     // patch instruction
@@ -373,11 +373,11 @@ fn test_riscv64_code_patching_count() {
 
     // zero out t0
     t0 = 0x0;
-    uc.reg_write(RegisterRISCV::T0, t0).unwrap();
+    uc.reg_write(RegisterRISCV::T0, t0);
     uc.emu_start(CODE_START, u64::MAX, 0, 1).unwrap();
 
     // check value
-    t0 = uc.reg_read(RegisterRISCV::T0).unwrap();
+    t0 = uc.reg_read(RegisterRISCV::T0);
     assert_eq!(t0, 0x7ff);
 }
 
@@ -394,7 +394,7 @@ fn test_riscv64_ecall() {
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let pc = uc.reg_read(RegisterRISCV::PC).unwrap();
+    let pc = uc.reg_read(RegisterRISCV::PC);
 
     assert_eq!(pc, CODE_START + 4);
 }
@@ -410,7 +410,7 @@ fn test_riscv32_mmio_map() {
     let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV32, None, &code, ());
 
     uc.mmio_map_ro(0x40000000, 0x40000, |uc, offset, _size| {
-        let a4 = uc.reg_read(RegisterRISCV::A4).unwrap();
+        let a4 = uc.reg_read(RegisterRISCV::A4);
         assert_eq!(a4, 0x40021 << 12);
         assert_eq!(offset, 0x21018);
         0
@@ -439,7 +439,7 @@ fn test_riscv32_map() {
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let a5 = uc.reg_read(RegisterRISCV::A5).unwrap();
+    let a5 = uc.reg_read(RegisterRISCV::A5);
     assert_eq!(a5, val);
 }
 
@@ -454,7 +454,7 @@ fn test_riscv64_mmio_map() {
     let mut uc = uc_common_setup::<_, RiscV>(Mode::RISCV64, None, &code, ());
 
     uc.mmio_map_ro(0x40000000, 0x40000, |uc, offset, _size| {
-        let a4 = uc.reg_read(RegisterRISCV::A4).unwrap();
+        let a4 = uc.reg_read(RegisterRISCV::A4);
         assert_eq!(a4, 0x40021 << 12);
         assert_eq!(offset, 0x21018);
         0
@@ -478,8 +478,8 @@ fn test_riscv_correct_address_in_small_jump_hook() {
 
     uc.add_mem_hook(HookType::MEM_UNMAPPED, 1, 0, |uc, _, address, _, _| {
         // Check registers
-        let x5 = uc.reg_read(RegisterRISCV::X5).unwrap();
-        let pc = uc.reg_read(RegisterRISCV::PC).unwrap();
+        let x5 = uc.reg_read(RegisterRISCV::X5);
+        let pc = uc.reg_read(RegisterRISCV::PC);
         assert_eq!(x5, 0x7F00);
         assert_eq!(pc, 0x7F00);
 
@@ -494,8 +494,8 @@ fn test_riscv_correct_address_in_small_jump_hook() {
         .unwrap_err();
     assert_eq!(err, uc_error::FETCH_UNMAPPED);
 
-    let x5 = uc.reg_read(RegisterRISCV::X5).unwrap();
-    let pc = uc.reg_read(RegisterRISCV::PC).unwrap();
+    let x5 = uc.reg_read(RegisterRISCV::X5);
+    let pc = uc.reg_read(RegisterRISCV::PC);
 
     assert_eq!(x5, 0x7F00);
     assert_eq!(pc, 0x7F00);
@@ -515,8 +515,8 @@ fn test_riscv_correct_address_in_long_jump_hook() {
 
     uc.add_mem_hook(HookType::MEM_UNMAPPED, 1, 0, |uc, _, address, _, _| {
         // Check registers
-        let x5 = uc.reg_read(RegisterRISCV::X5).unwrap();
-        let pc = uc.reg_read(RegisterRISCV::PC).unwrap();
+        let x5 = uc.reg_read(RegisterRISCV::X5);
+        let pc = uc.reg_read(RegisterRISCV::PC);
         assert_eq!(x5, 0x7FFFFFFFFFFFFF00);
         assert_eq!(pc, 0x7FFFFFFFFFFFFF00);
 
@@ -531,8 +531,8 @@ fn test_riscv_correct_address_in_long_jump_hook() {
         .unwrap_err();
     assert_eq!(err, uc_error::FETCH_UNMAPPED);
 
-    let x5 = uc.reg_read(RegisterRISCV::X5).unwrap();
-    let pc = uc.reg_read(RegisterRISCV::PC).unwrap();
+    let x5 = uc.reg_read(RegisterRISCV::X5);
+    let pc = uc.reg_read(RegisterRISCV::PC);
 
     assert_eq!(x5, 0x7FFFFFFFFFFFFF00);
     assert_eq!(pc, 0x7FFFFFFFFFFFFF00);
@@ -645,21 +645,21 @@ fn test_riscv_priv() {
     uc.mem_write(main_address, &code_main).unwrap();
 
     // Before anything executes we should be in M-Mode
-    let mut priv_value = uc.reg_read(RegisterRISCV::PRIV).unwrap();
+    let mut priv_value = uc.reg_read(RegisterRISCV::PRIV);
     assert_eq!(priv_value, 3);
 
     // We'll put a sentinel value in sscratch so we can determine whether we've
     // successfully written to it below.
     let mut reg_value = 0xffff;
-    uc.reg_write(RegisterRISCV::SSCRATCH, reg_value).unwrap();
+    uc.reg_write(RegisterRISCV::SSCRATCH, reg_value);
 
     // Run until we reach the "csrw" at the start of code_main, at which
     // point we should be in U-Mode due to the mret instruction.
     uc.emu_start(m_entry_address, main_address, 0, 10).unwrap();
 
-    let mut pc = uc.reg_read(RegisterRISCV::PC).unwrap();
+    let mut pc = uc.reg_read(RegisterRISCV::PC);
     assert_eq!(pc, main_address);
-    priv_value = uc.reg_read(RegisterRISCV::PRIV).unwrap();
+    priv_value = uc.reg_read(RegisterRISCV::PRIV);
     assert_eq!(priv_value, 0); // Now in U-Mode
 
     // U-Mode can't write to sscratch, so execution at this point should
@@ -668,15 +668,15 @@ fn test_riscv_priv() {
         .emu_start(main_address, main_end_address, 0, 0)
         .unwrap_err();
     assert_eq!(err, uc_error::EXCEPTION);
-    pc = uc.reg_read(RegisterRISCV::PC).unwrap();
+    pc = uc.reg_read(RegisterRISCV::PC);
     assert_eq!(pc, main_address + 4);
 
     // ...but if we force S-Mode then we should be able to set it successfully.
     priv_value = 1;
-    uc.reg_write(RegisterRISCV::PRIV, priv_value).unwrap();
+    uc.reg_write(RegisterRISCV::PRIV, priv_value);
     uc.emu_start(main_address, main_end_address, 0, 0).unwrap();
-    reg_value = uc.reg_read(RegisterRISCV::SSCRATCH).unwrap();
+    reg_value = uc.reg_read(RegisterRISCV::SSCRATCH);
     assert_eq!(reg_value, 0);
-    pc = uc.reg_read(RegisterRISCV::PC).unwrap();
+    pc = uc.reg_read(RegisterRISCV::PC);
     assert_eq!(pc, main_end_address);
 }

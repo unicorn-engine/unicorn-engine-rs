@@ -10,14 +10,14 @@ fn test_arm_nop() {
     let r1 = 0x5678;
 
     let mut uc = uc_common_setup::<_, Arm>(Mode::ARM, None, code, ());
-    uc.reg_write(RegisterARM::R0, r0).unwrap();
-    uc.reg_write(RegisterARM::R1, r1).unwrap();
+    uc.reg_write(RegisterARM::R0, r0);
+    uc.reg_write(RegisterARM::R1, r1);
 
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let r0 = uc.reg_read(RegisterARM::R0).unwrap();
-    let r1 = uc.reg_read(RegisterARM::R1).unwrap();
+    let r0 = uc.reg_read(RegisterARM::R0);
+    let r1 = uc.reg_read(RegisterARM::R1);
     assert_eq!(r0, 0x1234);
     assert_eq!(r1, 0x5678);
 }
@@ -29,12 +29,12 @@ fn test_arm_thumb_sub() {
 
     let mut uc =
         uc_common_setup::<_, Arm>(Mode::THUMB, Some(ArmCpuModel::CORTEX_A15 as i32), code, ());
-    uc.reg_write(RegisterARM::SP, sp).unwrap();
+    uc.reg_write(RegisterARM::SP, sp);
 
     uc.emu_start(CODE_START | 1, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let sp = uc.reg_read(RegisterARM::SP).unwrap();
+    let sp = uc.reg_read(RegisterARM::SP);
     assert_eq!(sp, 0x1228);
 }
 
@@ -54,17 +54,17 @@ fn test_armeb_sub() {
         code,
         (),
     );
-    uc.reg_write(RegisterARM::R0, r0).unwrap();
-    uc.reg_write(RegisterARM::R2, r2).unwrap();
-    uc.reg_write(RegisterARM::R3, r3).unwrap();
+    uc.reg_write(RegisterARM::R0, r0);
+    uc.reg_write(RegisterARM::R2, r2);
+    uc.reg_write(RegisterARM::R3, r3);
 
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let r0 = uc.reg_read(RegisterARM::R0).unwrap();
-    let r1 = uc.reg_read(RegisterARM::R1).unwrap();
-    let r2 = uc.reg_read(RegisterARM::R2).unwrap();
-    let r3 = uc.reg_read(RegisterARM::R3).unwrap();
+    let r0 = uc.reg_read(RegisterARM::R0);
+    let r1 = uc.reg_read(RegisterARM::R1);
+    let r2 = uc.reg_read(RegisterARM::R2);
+    let r3 = uc.reg_read(RegisterARM::R3);
 
     assert_eq!(r0, 0x37);
     assert_eq!(r2, 0x6789);
@@ -88,17 +88,17 @@ fn test_armeb_be8_sub() {
         code,
         (),
     );
-    uc.reg_write(RegisterARM::R0, r0).unwrap();
-    uc.reg_write(RegisterARM::R2, r2).unwrap();
-    uc.reg_write(RegisterARM::R3, r3).unwrap();
+    uc.reg_write(RegisterARM::R0, r0);
+    uc.reg_write(RegisterARM::R2, r2);
+    uc.reg_write(RegisterARM::R3, r3);
 
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let r0 = uc.reg_read(RegisterARM::R0).unwrap();
-    let r1 = uc.reg_read(RegisterARM::R1).unwrap();
-    let r2 = uc.reg_read(RegisterARM::R2).unwrap();
-    let r3 = uc.reg_read(RegisterARM::R3).unwrap();
+    let r0 = uc.reg_read(RegisterARM::R0);
+    let r1 = uc.reg_read(RegisterARM::R1);
+    let r2 = uc.reg_read(RegisterARM::R2);
+    let r3 = uc.reg_read(RegisterARM::R3);
 
     assert_eq!(r0, 0x37);
     assert_eq!(r2, 0x6789);
@@ -117,12 +117,12 @@ fn test_arm_thumbeb_sub() {
         code,
         (),
     );
-    uc.reg_write(RegisterARM::SP, sp).unwrap();
+    uc.reg_write(RegisterARM::SP, sp);
 
     uc.emu_start(CODE_START | 1, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let sp = uc.reg_read(RegisterARM::SP).unwrap();
+    let sp = uc.reg_read(RegisterARM::SP);
     assert_eq!(sp, 0x1228);
 }
 
@@ -149,9 +149,9 @@ fn test_arm_thumb_ite() {
         count,
     );
 
-    uc.reg_write(RegisterARM::SP, sp).unwrap();
-    uc.reg_write(RegisterARM::R2, r2 as u64).unwrap();
-    uc.reg_write(RegisterARM::R3, r3 as u64).unwrap();
+    uc.reg_write(RegisterARM::SP, sp);
+    uc.reg_write(RegisterARM::R2, r2 as u64);
+    uc.reg_write(RegisterARM::R3, r3 as u64);
 
     uc.mem_map(sp, 0x1000, Prot::ALL).unwrap();
     r2 = 0x68;
@@ -168,8 +168,8 @@ fn test_arm_thumb_ite() {
     uc.emu_start(CODE_START | 1, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    r2 = uc.reg_read(RegisterARM::R2).unwrap() as u32;
-    r3 = uc.reg_read(RegisterARM::R3).unwrap() as u32;
+    r2 = uc.reg_read(RegisterARM::R2) as u32;
+    r3 = uc.reg_read(RegisterARM::R3) as u32;
     count = *uc.get_data();
     assert_eq!(r2, 0x68);
     assert_eq!(r3, 0x78);
@@ -178,19 +178,19 @@ fn test_arm_thumb_ite() {
     r2 = 0;
     *uc.get_data_mut() = 0;
 
-    uc.reg_write(RegisterARM::R2, r2 as u64).unwrap();
-    uc.reg_write(RegisterARM::R3, r3 as u64).unwrap();
+    uc.reg_write(RegisterARM::R2, r2 as u64);
+    uc.reg_write(RegisterARM::R3, r3 as u64);
 
     for _ in 0..6 {
         // Execute one instruction at a time.
         uc.emu_start(pc as u64 | 1, CODE_START + code.len() as u64, 0, 1)
             .unwrap();
 
-        pc = uc.reg_read(RegisterARM::PC).unwrap() as u32;
+        pc = uc.reg_read(RegisterARM::PC) as u32;
     }
 
-    r2 = uc.reg_read(RegisterARM::R2).unwrap() as u32;
-    r3 = uc.reg_read(RegisterARM::R3).unwrap() as u32;
+    r2 = uc.reg_read(RegisterARM::R2) as u32;
+    r3 = uc.reg_read(RegisterARM::R3) as u32;
     count = *uc.get_data();
 
     assert_eq!(r2, 0x68);
@@ -214,14 +214,14 @@ fn test_arm_m_thumb_mrs() {
         (),
     );
 
-    uc.reg_write(RegisterARM::CONTROL, control as u64).unwrap();
-    uc.reg_write(RegisterARM::APSR_NZCVQ, apsr as u64).unwrap();
+    uc.reg_write(RegisterARM::CONTROL, control as u64);
+    uc.reg_write(RegisterARM::APSR_NZCVQ, apsr as u64);
 
     uc.emu_start(CODE_START | 1, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let r0 = uc.reg_read(RegisterARM::R0).unwrap() as u32;
-    let r1 = uc.reg_read(RegisterARM::R1).unwrap() as u32;
+    let r0 = uc.reg_read(RegisterARM::R0) as u32;
+    let r1 = uc.reg_read(RegisterARM::R1) as u32;
 
     assert_eq!(r0, 0b10);
     assert_eq!(r1, 0b10101 << 27);
@@ -231,24 +231,24 @@ fn test_arm_m_thumb_mrs() {
 fn test_arm_m_control() {
     let mut uc = Unicorn::<_, Arm>::new(Mode::THUMB | Mode::MCLASS).unwrap();
     let mut control = 0;
-    uc.reg_write(RegisterARM::CONTROL, control as u64).unwrap();
+    uc.reg_write(RegisterARM::CONTROL, control as u64);
 
     let msp = 0x1000;
-    uc.reg_write(RegisterARM::R13, msp as u64).unwrap();
+    uc.reg_write(RegisterARM::R13, msp as u64);
 
     control = 0b10;
-    uc.reg_write(RegisterARM::CONTROL, control as u64).unwrap();
+    uc.reg_write(RegisterARM::CONTROL, control as u64);
 
-    let psp = uc.reg_read(RegisterARM::R13).unwrap() as u32;
+    let psp = uc.reg_read(RegisterARM::R13) as u32;
     assert_ne!(psp, msp);
 
     let psp = 0x2000;
-    uc.reg_write(RegisterARM::R13, psp as u64).unwrap();
+    uc.reg_write(RegisterARM::R13, psp as u64);
 
     control = 0;
-    uc.reg_write(RegisterARM::CONTROL, control as u64).unwrap();
+    uc.reg_write(RegisterARM::CONTROL, control as u64);
 
-    let msp = uc.reg_read(RegisterARM::R13).unwrap() as u32;
+    let msp = uc.reg_read(RegisterARM::R13) as u32;
     assert_ne!(psp, msp);
     assert_eq!(msp, 0x1000);
 }
@@ -272,7 +272,7 @@ fn test_arm_m_exc_return() {
 
     uc.mem_map(sp - 0x1000, 0x1000, Prot::ALL).unwrap();
     uc.add_intr_hook(|uc, intno| {
-        let pc = uc.reg_read(RegisterARM::PC).unwrap() as u32;
+        let pc = uc.reg_read(RegisterARM::PC) as u32;
         assert_eq!(intno, 8); // EXCP_EXCEPTION_EXIT: Return from v7M exception.
         assert_eq!(pc | 1, 0xFFFFFFFD);
         uc.emu_stop().unwrap();
@@ -280,9 +280,9 @@ fn test_arm_m_exc_return() {
     .unwrap();
 
     sp -= 0x1c;
-    uc.reg_write(RegisterARM::SP, sp).unwrap();
+    uc.reg_write(RegisterARM::SP, sp);
 
-    uc.reg_write(RegisterARM::IPSR, ipsr as u64).unwrap();
+    uc.reg_write(RegisterARM::IPSR, ipsr as u64);
 
     uc.emu_start(CODE_START | 1, CODE_START + code.len() as u64, 0, 2)
         .unwrap();
@@ -305,19 +305,19 @@ fn test_arm_und32_to_svc32() {
     let mut uc =
         uc_common_setup::<_, Arm>(Mode::ARM, Some(ArmCpuModel::CORTEX_A9 as i32), code, ());
 
-    uc.reg_write(RegisterARM::CPSR, cpsr as u64).unwrap();
-    uc.reg_write(RegisterARM::SP, sp as u64).unwrap();
+    uc.reg_write(RegisterARM::CPSR, cpsr as u64);
+    uc.reg_write(RegisterARM::SP, sp as u64);
 
     let cpsr = 0x4000009b; // UND32
-    uc.reg_write(RegisterARM::CPSR, cpsr as u64).unwrap();
-    uc.reg_write(RegisterARM::SPSR, spsr as u64).unwrap();
-    uc.reg_write(RegisterARM::SP, 0xDEAD0000).unwrap();
-    uc.reg_write(RegisterARM::LR, lr).unwrap();
+    uc.reg_write(RegisterARM::CPSR, cpsr as u64);
+    uc.reg_write(RegisterARM::SPSR, spsr as u64);
+    uc.reg_write(RegisterARM::SP, 0xDEAD0000);
+    uc.reg_write(RegisterARM::LR, lr);
 
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 3)
         .unwrap();
 
-    let sp = uc.reg_read(RegisterARM::SP).unwrap() as u32;
+    let sp = uc.reg_read(RegisterARM::SP) as u32;
     assert_eq!(sp, 0x12345678);
 }
 
@@ -331,37 +331,37 @@ fn test_arm_usr32_to_svc32() {
     let mut sp = 0x12345678;
     let mut lr = 0x00102220;
 
-    uc.reg_write(RegisterARM::CPSR, cpsr as u64).unwrap();
-    uc.reg_write(RegisterARM::SP, sp as u64).unwrap();
-    uc.reg_write(RegisterARM::LR, lr as u64).unwrap();
+    uc.reg_write(RegisterARM::CPSR, cpsr as u64);
+    uc.reg_write(RegisterARM::SP, sp as u64);
+    uc.reg_write(RegisterARM::LR, lr as u64);
 
     cpsr = 0x4000009b; // UND32
-    uc.reg_write(RegisterARM::CPSR, cpsr as u64).unwrap();
+    uc.reg_write(RegisterARM::CPSR, cpsr as u64);
     let spsr = 0x40000093; // Save previous CPSR
-    uc.reg_write(RegisterARM::SPSR, spsr as u64).unwrap();
+    uc.reg_write(RegisterARM::SPSR, spsr as u64);
     sp = 0xDEAD0000;
-    uc.reg_write(RegisterARM::SP, sp as u64).unwrap();
+    uc.reg_write(RegisterARM::SP, sp as u64);
     lr = 0x00509998;
-    uc.reg_write(RegisterARM::LR, lr as u64).unwrap();
+    uc.reg_write(RegisterARM::LR, lr as u64);
 
-    cpsr = uc.reg_read(RegisterARM::CPSR).unwrap() as u32;
+    cpsr = uc.reg_read(RegisterARM::CPSR) as u32;
     assert_eq!(cpsr & ((1 << 4) - 1), 0xb); // We are in UND32
 
     cpsr = 0x40000090; // USR32
-    uc.reg_write(RegisterARM::CPSR, cpsr as u64).unwrap();
+    uc.reg_write(RegisterARM::CPSR, cpsr as u64);
     sp = 0x0010000;
-    uc.reg_write(RegisterARM::R13, sp as u64).unwrap();
+    uc.reg_write(RegisterARM::R13, sp as u64);
     lr = 0x0001234;
-    uc.reg_write(RegisterARM::LR, lr as u64).unwrap();
+    uc.reg_write(RegisterARM::LR, lr as u64);
 
-    cpsr = uc.reg_read(RegisterARM::CPSR).unwrap() as u32;
+    cpsr = uc.reg_read(RegisterARM::CPSR) as u32;
     assert_eq!(cpsr & ((1 << 4) - 1), 0); // We are in USR32
 
     cpsr = 0x40000093; // SVC32
-    uc.reg_write(RegisterARM::CPSR, cpsr as u64).unwrap();
+    uc.reg_write(RegisterARM::CPSR, cpsr as u64);
 
-    cpsr = uc.reg_read(RegisterARM::CPSR).unwrap() as u32;
-    sp = uc.reg_read(RegisterARM::SP).unwrap() as u32;
+    cpsr = uc.reg_read(RegisterARM::CPSR) as u32;
+    sp = uc.reg_read(RegisterARM::SP) as u32;
     assert_eq!(cpsr & ((1 << 4) - 1), 3); // We are in SVC32
     assert_eq!(sp, 0x12345678);
 }
@@ -377,12 +377,12 @@ fn test_arm_v8() {
 
     uc.mem_map(r0, 0x1000, Prot::ALL).unwrap();
     uc.mem_write(r0, &r1.to_le_bytes()).unwrap();
-    uc.reg_write(RegisterARM::R0, r0).unwrap();
+    uc.reg_write(RegisterARM::R0, r0);
 
     uc.emu_start(CODE_START | 1, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let r1 = uc.reg_read(RegisterARM::R1).unwrap() as u32;
+    let r1 = uc.reg_read(RegisterARM::R1) as u32;
     assert_eq!(r1, 0xdeadbeef);
 }
 
@@ -396,14 +396,14 @@ fn test_arm_thumb_smlabb() {
     let mut uc =
         uc_common_setup::<_, Arm>(Mode::THUMB, Some(ArmCpuModel::CORTEX_M7 as i32), code, ());
 
-    uc.reg_write(RegisterARM::R1, r1 as u64).unwrap();
-    uc.reg_write(RegisterARM::R2, r2 as u64).unwrap();
-    uc.reg_write(RegisterARM::R3, r3 as u64).unwrap();
+    uc.reg_write(RegisterARM::R1, r1 as u64);
+    uc.reg_write(RegisterARM::R2, r2 as u64);
+    uc.reg_write(RegisterARM::R3, r3 as u64);
 
     uc.emu_start(CODE_START | 1, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let r3 = uc.reg_read(RegisterARM::R3).unwrap() as u32;
+    let r3 = uc.reg_read(RegisterARM::R3) as u32;
     assert_eq!(r3, 5 * 7 + 9);
 }
 
@@ -424,25 +424,25 @@ fn test_arm_not_allow_privilege_escalation() {
     let mut uc =
         uc_common_setup::<_, Arm>(Mode::ARM, Some(ArmCpuModel::CORTEX_A15 as i32), code, ());
 
-    uc.reg_write(RegisterARM::CPSR, cpsr as u64).unwrap();
-    uc.reg_write(RegisterARM::SP, sp as u64).unwrap();
-    uc.reg_write(RegisterARM::LR, lr as u64).unwrap();
+    uc.reg_write(RegisterARM::CPSR, cpsr as u64);
+    uc.reg_write(RegisterARM::SP, sp as u64);
+    uc.reg_write(RegisterARM::LR, lr as u64);
 
     let cpsr = 0x40000010; // USR32
-    uc.reg_write(RegisterARM::CPSR, cpsr as u64).unwrap();
+    uc.reg_write(RegisterARM::CPSR, cpsr as u64);
     let sp = 0x0010000;
-    uc.reg_write(RegisterARM::SP, sp as u64).unwrap();
+    uc.reg_write(RegisterARM::SP, sp as u64);
     let lr = 0x0001234;
-    uc.reg_write(RegisterARM::LR, lr as u64).unwrap();
+    uc.reg_write(RegisterARM::LR, lr as u64);
 
     let err = uc
         .emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap_err();
     assert_eq!(err, uc_error::EXCEPTION);
 
-    let sp = uc.reg_read(RegisterARM::SP).unwrap() as u32;
-    let lr = uc.reg_read(RegisterARM::LR).unwrap() as u32;
-    let cpsr = uc.reg_read(RegisterARM::CPSR).unwrap() as u32;
+    let sp = uc.reg_read(RegisterARM::SP) as u32;
+    let lr = uc.reg_read(RegisterARM::LR) as u32;
+    let cpsr = uc.reg_read(RegisterARM::CPSR) as u32;
 
     assert_eq!(cpsr & ((1 << 4) - 1), 0); // Stay in USR32
     assert_eq!(lr, 0x1234);
@@ -476,16 +476,16 @@ fn test_arm_hflags_rebuilt() {
     let mut uc =
         uc_common_setup::<_, Arm>(Mode::ARM, Some(ArmCpuModel::CORTEX_A9 as i32), code, ());
 
-    uc.reg_write(RegisterARM::CPSR, cpsr as u64).unwrap();
-    uc.reg_write(RegisterARM::SP, sp as u64).unwrap();
-    uc.reg_write(RegisterARM::LR, lr as u64).unwrap();
+    uc.reg_write(RegisterARM::CPSR, cpsr as u64);
+    uc.reg_write(RegisterARM::SP, sp as u64);
+    uc.reg_write(RegisterARM::LR, lr as u64);
 
     let cpsr = 0x40000010; // USR32
-    uc.reg_write(RegisterARM::CPSR, cpsr as u64).unwrap();
+    uc.reg_write(RegisterARM::CPSR, cpsr as u64);
     let sp = 0x0010000;
-    uc.reg_write(RegisterARM::R13, sp as u64).unwrap();
+    uc.reg_write(RegisterARM::R13, sp as u64);
     let lr = 0x0001234;
-    uc.reg_write(RegisterARM::R14, lr as u64).unwrap();
+    uc.reg_write(RegisterARM::R14, lr as u64);
 
     let err = uc
         .emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
@@ -493,19 +493,19 @@ fn test_arm_hflags_rebuilt() {
     assert_eq!(err, uc_error::EXCEPTION);
 
     let cpsr = 0x60000013;
-    uc.reg_write(RegisterARM::CPSR, cpsr as u64).unwrap();
+    uc.reg_write(RegisterARM::CPSR, cpsr as u64);
     let cpsr = 0x60000010;
-    uc.reg_write(RegisterARM::CPSR, cpsr as u64).unwrap();
+    uc.reg_write(RegisterARM::CPSR, cpsr as u64);
     let cpsr = 0x60000013;
-    uc.reg_write(RegisterARM::CPSR, cpsr as u64).unwrap();
+    uc.reg_write(RegisterARM::CPSR, cpsr as u64);
 
-    let pc = uc.reg_read(RegisterARM::PC).unwrap();
+    let pc = uc.reg_read(RegisterARM::PC);
     uc.emu_start(pc, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let cpsr = uc.reg_read(RegisterARM::CPSR).unwrap() as u32;
-    let sp = uc.reg_read(RegisterARM::R13).unwrap() as u32;
-    let lr = uc.reg_read(RegisterARM::R14).unwrap() as u32;
+    let cpsr = uc.reg_read(RegisterARM::CPSR) as u32;
+    let sp = uc.reg_read(RegisterARM::R13) as u32;
+    let lr = uc.reg_read(RegisterARM::R14) as u32;
 
     assert_eq!(cpsr, 0x60000010);
     assert_eq!(sp, 0x00010000);
@@ -522,16 +522,16 @@ fn test_arm_mem_access_abort() {
 
     let mut uc = uc_common_setup::<_, Arm>(Mode::ARM, Some(ArmCpuModel::CORTEX_A9 as i32), code, 0);
 
-    uc.reg_write(RegisterARM::R0, r0 as u64).unwrap();
+    uc.reg_write(RegisterARM::R0, r0 as u64);
 
     uc.add_mem_hook(HookType::MEM_UNMAPPED, 1, 0, |uc, _, _, _, _| {
-        *uc.get_data_mut() = uc.reg_read(RegisterARM::PC).unwrap();
+        *uc.get_data_mut() = uc.reg_read(RegisterARM::PC);
         false
     })
     .unwrap();
 
     uc.add_insn_invalid_hook(|uc| {
-        *uc.get_data_mut() = uc.reg_read(RegisterARM::PC).unwrap();
+        *uc.get_data_mut() = uc.reg_read(RegisterARM::PC);
         false
     })
     .unwrap();
@@ -539,7 +539,7 @@ fn test_arm_mem_access_abort() {
     let err = uc.emu_start(CODE_START, CODE_START + 4, 0, 0).unwrap_err();
     assert_eq!(err, uc_error::READ_UNMAPPED);
 
-    let pc = uc.reg_read(RegisterARM::PC).unwrap();
+    let pc = uc.reg_read(RegisterARM::PC);
     assert_eq!(pc, *uc.get_data());
 
     let err = uc
@@ -547,13 +547,13 @@ fn test_arm_mem_access_abort() {
         .unwrap_err();
     assert_eq!(err, uc_error::INSN_INVALID);
 
-    let pc = uc.reg_read(RegisterARM::PC).unwrap();
+    let pc = uc.reg_read(RegisterARM::PC);
     assert_eq!(pc, *uc.get_data());
 
     let err = uc.emu_start(0x900000, 0x900000 + 8, 0, 0).unwrap_err();
     assert_eq!(err, uc_error::FETCH_UNMAPPED);
 
-    let pc = uc.reg_read(RegisterARM::PC).unwrap();
+    let pc = uc.reg_read(RegisterARM::PC);
     assert_eq!(pc, *uc.get_data());
 }
 
@@ -573,7 +573,7 @@ fn test_arm_be_cpsr_sctlr() {
 
     let mut reg = RegisterARMCP::new().cp(15).crn(1);
     uc.reg_read_arm_coproc(&mut reg).unwrap();
-    let cpsr = uc.reg_read(RegisterARM::CPSR).unwrap();
+    let cpsr = uc.reg_read(RegisterARM::CPSR);
 
     assert_ne!(reg.val & (1 << 7), 0);
     assert_ne!(cpsr & (1 << 9), 0);
@@ -584,7 +584,7 @@ fn test_arm_be_cpsr_sctlr() {
 
     let mut reg = RegisterARMCP::new().cp(15).crn(1);
     uc.reg_read_arm_coproc(&mut reg).unwrap();
-    let cpsr = uc.reg_read(RegisterARM::CPSR).unwrap();
+    let cpsr = uc.reg_read(RegisterARM::CPSR);
 
     // SCTLR.B == 0
     assert_eq!(reg.val & (1 << 7), 0);
@@ -599,23 +599,23 @@ fn test_arm_switch_endian() {
         uc_common_setup::<_, Arm>(Mode::ARM, Some(ArmCpuModel::CORTEX_A15 as i32), code, ());
 
     let r1 = CODE_START;
-    uc.reg_write(RegisterARM::R1, r1).unwrap();
+    uc.reg_write(RegisterARM::R1, r1);
 
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let r0 = uc.reg_read(RegisterARM::R0).unwrap();
+    let r0 = uc.reg_read(RegisterARM::R0);
 
     assert_eq!(r0, 0xe5910000);
 
-    let mut cpsr = uc.reg_read(RegisterARM::CPSR).unwrap();
+    let mut cpsr = uc.reg_read(RegisterARM::CPSR);
     cpsr |= 1 << 9;
-    uc.reg_write(RegisterARM::CPSR, cpsr).unwrap();
+    uc.reg_write(RegisterARM::CPSR, cpsr);
 
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let r0 = uc.reg_read(RegisterARM::R0).unwrap();
+    let r0 = uc.reg_read(RegisterARM::R0);
 
     assert_eq!(r0, 0x000091e5);
 }
@@ -636,31 +636,31 @@ fn test_armeb_ldrb() {
     uc.mem_write(data_address, b"\x66\x67\x68\x69").unwrap();
 
     let mut r2 = data_address;
-    uc.reg_write(RegisterARM::R2, r2).unwrap();
+    uc.reg_write(RegisterARM::R2, r2);
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
-    let r1 = uc.reg_read(RegisterARM::R1).unwrap();
+    let r1 = uc.reg_read(RegisterARM::R1);
     assert_eq!(r1, 0x66);
 
     r2 += 1;
-    uc.reg_write(RegisterARM::R2, r2).unwrap();
+    uc.reg_write(RegisterARM::R2, r2);
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
-    let r1 = uc.reg_read(RegisterARM::R1).unwrap();
+    let r1 = uc.reg_read(RegisterARM::R1);
     assert_eq!(r1, 0x67);
 
     r2 += 1;
-    uc.reg_write(RegisterARM::R2, r2).unwrap();
+    uc.reg_write(RegisterARM::R2, r2);
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
-    let r1 = uc.reg_read(RegisterARM::R1).unwrap();
+    let r1 = uc.reg_read(RegisterARM::R1);
     assert_eq!(r1, 0x68);
 
     r2 += 1;
-    uc.reg_write(RegisterARM::R2, r2).unwrap();
+    uc.reg_write(RegisterARM::R2, r2);
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
-    let r1 = uc.reg_read(RegisterARM::R1).unwrap();
+    let r1 = uc.reg_read(RegisterARM::R1);
     assert_eq!(r1, 0x69);
 }
 
@@ -673,8 +673,8 @@ fn test_arm_context_save() {
     let mut context = uc.context_alloc().unwrap();
     uc.context_save(&mut context).unwrap();
 
-    let pc = context.reg_read(RegisterARM::PC).unwrap();
-    context.reg_write(RegisterARM::PC, pc).unwrap();
+    let pc = context.reg_read(RegisterARM::PC);
+    context.reg_write(RegisterARM::PC, pc);
     uc.context_restore(&context).unwrap();
 
     let uc2 = uc_common_setup::<_, Arm>(
@@ -685,7 +685,7 @@ fn test_arm_context_save() {
     );
     uc2.context_restore(&context).unwrap();
 
-    let pc2 = uc2.reg_read(RegisterARM::PC).unwrap();
+    let pc2 = uc2.reg_read(RegisterARM::PC);
     assert_eq!(pc, pc2);
 }
 
@@ -707,7 +707,7 @@ fn test_arm_thumb2() {
     uc.emu_start(CODE_START | 1, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let r0 = uc.reg_read(RegisterARM::R0).unwrap();
+    let r0 = uc.reg_read(RegisterARM::R0);
     assert_eq!(r0, 0x4);
 }
 
@@ -729,7 +729,7 @@ fn test_armeb_be32_thumb2() {
     uc.emu_start(CODE_START | 1, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let r0 = uc.reg_read(RegisterARM::R0).unwrap();
+    let r0 = uc.reg_read(RegisterARM::R0);
     assert_eq!(r0, 0x4);
 }
 
@@ -752,7 +752,7 @@ fn test_arm_mem_hook_read_write() {
         [0u64; 2],
     );
 
-    uc.reg_write(RegisterARM::SP, sp).unwrap();
+    uc.reg_write(RegisterARM::SP, sp);
     uc.mem_map(0x8000, 1024 * 16, Prot::ALL).unwrap();
 
     uc.add_mem_hook(HookType::MEM_READ, 1, 0, |uc, _, _, _, _| {
@@ -869,10 +869,10 @@ fn test_arm_cp15_c1_c0_2() {
         .unwrap();
 
     // Write to CP15 C1_C0_2
-    uc.reg_write(RegisterARM::C1_C0_2, val).unwrap();
+    uc.reg_write(RegisterARM::C1_C0_2, val);
 
     // Read from CP15 C1_C0_2
-    let read_val = uc.reg_read(RegisterARM::C1_C0_2).unwrap();
+    let read_val = uc.reg_read(RegisterARM::C1_C0_2);
 
     assert_eq!(val, read_val);
 }

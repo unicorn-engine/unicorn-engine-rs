@@ -54,15 +54,15 @@ fn test_uc_ctl_exits() {
     uc.ctl_exits_enable().unwrap();
     uc.ctl_set_exits(&exits).unwrap();
 
-    uc.reg_write(RegisterX86::EAX, eax).unwrap();
-    uc.reg_write(RegisterX86::EBX, ebx).unwrap();
+    uc.reg_write(RegisterX86::EAX, eax);
+    uc.reg_write(RegisterX86::EBX, ebx);
 
     // Run twice.
     uc.emu_start(CODE_START, 0, 0, 0).unwrap();
     uc.emu_start(CODE_START, 0, 0, 0).unwrap();
 
-    let eax = uc.reg_read(RegisterX86::EAX).unwrap();
-    let ebx = uc.reg_read(RegisterX86::EBX).unwrap();
+    let eax = uc.reg_read(RegisterX86::EAX);
+    let ebx = uc.reg_read(RegisterX86::EBX);
 
     assert_eq!(eax, 1);
     assert_eq!(ebx, 1);
@@ -216,7 +216,7 @@ fn test_uc_emu_stop_set_ip() {
             let rip = CODE_START + 0xb;
             if address == CODE_START + 0x7 {
                 uc.emu_stop().unwrap();
-                uc.reg_write(RegisterX86::RIP, rip).unwrap();
+                uc.reg_write(RegisterX86::RIP, rip);
             }
         },
     )
@@ -225,7 +225,7 @@ fn test_uc_emu_stop_set_ip() {
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let rip = uc.reg_read(RegisterX86::RIP).unwrap();
+    let rip = uc.reg_read(RegisterX86::RIP);
     assert_eq!(rip, CODE_START + 0xb);
 }
 

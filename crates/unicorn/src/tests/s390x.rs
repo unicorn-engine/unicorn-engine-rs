@@ -14,13 +14,13 @@ fn test_s390x_lr() {
 
     let mut uc = uc_common_setup::<_, S390X>(Mode::BIG_ENDIAN, None, &code, ());
 
-    uc.reg_write(RegisterS390X::R3, r3).unwrap();
+    uc.reg_write(RegisterS390X::R3, r3);
 
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let r2 = uc.reg_read(RegisterS390X::R2).unwrap();
-    let pc = uc.reg_read(RegisterS390X::PC).unwrap();
+    let r2 = uc.reg_read(RegisterS390X::R2);
+    let pc = uc.reg_read(RegisterS390X::PC);
 
     assert_eq!(r2, 0x114514);
     assert_eq!(pc, CODE_START + code.len() as u64);

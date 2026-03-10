@@ -20,10 +20,8 @@
 //!     emu.mem_write(0x1000, &arm_code32)
 //!         .expect("failed to write instructions");
 //!
-//!     emu.reg_write(RegisterARM::R0, 123)
-//!         .expect("failed to write to R0");
-//!     emu.reg_write(RegisterARM::R5, 1337)
-//!         .expect("failed to write to R5");
+//!     emu.reg_write(RegisterARM::R0, 123);
+//!     emu.reg_write(RegisterARM::R5, 1337);
 //!
 //!     emu.emu_start(
 //!         0x1000,
@@ -32,8 +30,8 @@
 //!         1000,
 //!     )
 //!     .unwrap();
-//!     assert_eq!(emu.reg_read(RegisterARM::R0), Ok(100));
-//!     assert_eq!(emu.reg_read(RegisterARM::R5), Ok(1337));
+//!     assert_eq!(emu.reg_read(RegisterARM::R0), 100);
+//!     assert_eq!(emu.reg_read(RegisterARM::R5), 1337);
 //! }
 //! ```
 
@@ -68,14 +66,17 @@ impl<A: UcArch> Context<A> {
         !self.context.is_null()
     }
 
-    pub fn reg_read(&self, reg: A::Reg) -> Result<u64, uc_error> {
+    pub fn reg_read(&self, reg: A::Reg) -> u64 {
         let mut value = 0;
         unsafe { uc_context_reg_read(self.context, reg.id(), (&raw mut value).cast()) }
             .and(Ok(value))
+            .expect("read of a valid register should never fail")
     }
 
-    pub fn reg_write(&mut self, reg: A::Reg, value: u64) -> Result<(), uc_error> {
-        unsafe { uc_context_reg_write(self.context, reg.id(), (&raw const value).cast()) }.into()
+    pub fn reg_write(&mut self, reg: A::Reg, value: u64) {
+        unsafe { uc_context_reg_write(self.context, reg.id(), (&raw const value).cast()) }
+            .and(Ok(()))
+            .expect("write to a valid register should never fail");
     }
 }
 
@@ -188,7 +189,6 @@ impl<'a, A: UcArch> Unicorn<'a, (), A> {
 impl<'a, D, A: UcArch> Unicorn<'a, D, A>
 where
     D: 'a,
-    A: 'a,
 {
     /// Create a new instance of the unicorn engine for the specified architecture
     /// and hardware mode.
@@ -559,17 +559,14 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
     }
 
     /// Write an unsigned value to a register.
-    pub fn reg_write(&mut self, regid: A::Reg, value: u64) -> Result<(), uc_error> {
-        unsafe { uc_reg_write(self.get_handle(), regid.id(), (&raw const value).cast()) }.into()
+    pub fn reg_write(&mut self, regid: A::Reg, value: u64) {
+        unsafe { uc_reg_write(self.get_handle(), regid.id(), (&raw const value).cast()) }
+            .and(Ok(()))
+            .expect("write to a valid register should never fail");
     }
 
     /// Write values into batch of registers
-    pub fn reg_write_batch<T>(
-        &self,
-        regs: &[A::Reg],
-        values: &[u64],
-        count: i32,
-    ) -> Result<(), uc_error> {
+    pub fn reg_write_batch<T>(&self, regs: &[A::Reg], values: &[u64], count: i32) {
         let mut values_ptrs = vec![core::ptr::null::<u64>(); count as usize];
         let mut regs = regs.iter().map(|regid| (*regid).id()).collect::<Vec<i32>>();
         for i in 0..values.len() {
@@ -583,29 +580,34 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 count,
             )
         }
-        .into()
+        .and(Ok(()))
+        .expect("write to a valid register should never fail");
     }
 
     /// Write variable sized values into registers.
     ///
     /// The user has to make sure that the buffer length matches the register size.
     /// This adds support for registers >64 bit (GDTR/IDTR, XMM, YMM, ZMM (x86); Q, V (arm64)).
-    pub fn reg_write_long(&self, reg: A::Reg, value: &[u8]) -> Result<(), uc_error> {
-        unsafe { uc_reg_write(self.get_handle(), reg.id(), value.as_ptr().cast()) }.into()
+    pub fn reg_write_long(&self, reg: A::Reg, value: &[u8]) {
+        unsafe { uc_reg_write(self.get_handle(), reg.id(), value.as_ptr().cast()) }
+            .and(Ok(()))
+            .expect("write to a valid register should never fail");
     }
 
     /// Read an unsigned value from a register.
     ///
     /// Not to be used with registers larger than 64 bit.
-    pub fn reg_read(&self, reg: A::Reg) -> Result<u64, uc_error> {
+    pub fn reg_read(&self, reg: A::Reg) -> u64 {
         let mut value = 0;
-        unsafe { uc_reg_read(self.get_handle(), reg.id(), (&raw mut value).cast()) }.and(Ok(value))
+        unsafe { uc_reg_read(self.get_handle(), reg.id(), (&raw mut value).cast()) }
+            .and(Ok(value))
+            .expect("read of a valid register should never fail")
     }
 
     /// Read batch of registers
     ///
     /// Not to be used with registers larger than 64 bit
-    pub fn reg_read_batch(&self, regs: &mut [A::Reg], count: i32) -> Result<Vec<u64>, uc_error> {
+    pub fn reg_read_batch(&self, regs: &mut [A::Reg], count: i32) -> Vec<u64> {
         unsafe {
             let mut addrs_vec = vec![0u64; count as usize];
             let addrs = addrs_vec.as_mut_slice();
@@ -620,8 +622,8 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 count,
             );
             match res {
-                uc_error::OK => Ok(addrs_vec),
-                _ => Err(res),
+                uc_error::OK => addrs_vec,
+                _ => panic!("read of a valid register should never fail"),
             }
         }
     }
@@ -751,9 +753,11 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
     }
 
     /// Read a signed 32-bit value from a register.
-    pub fn reg_read_i32(&self, reg: A::Reg) -> Result<i32, uc_error> {
+    pub fn reg_read_i32(&self, reg: A::Reg) -> i32 {
         let mut value = 0;
-        unsafe { uc_reg_read(self.get_handle(), reg.id(), (&raw mut value).cast()) }.and(Ok(value))
+        unsafe { uc_reg_read(self.get_handle(), reg.id(), (&raw mut value).cast()) }
+            .and(Ok(value))
+            .expect("read of a valid register should never fail")
     }
 
     /// Add a code hook.
@@ -1259,14 +1263,15 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
     pub fn pc_read(&self) -> Result<u64, uc_error> {
         let mode = self.ctl_get_mode()?;
 
-        self.reg_read(A::Reg::pc(mode)?)
+        Ok(self.reg_read(A::Reg::pc(mode)?))
     }
 
     /// Sets the program counter for this `unicorn` instance.
     pub fn set_pc(&mut self, value: u64) -> Result<(), uc_error> {
         let mode = self.ctl_get_mode()?;
 
-        self.reg_write(A::Reg::pc(mode)?, value)
+        self.reg_write(A::Reg::pc(mode)?, value);
+        Ok(())
     }
 
     pub fn ctl_get_mode(&self) -> Result<Mode, uc_error> {

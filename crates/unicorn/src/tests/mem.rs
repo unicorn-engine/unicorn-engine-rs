@@ -54,8 +54,8 @@ fn test_mem_protect() {
     let eax = 0x2000;
     let esi = 0xdeadbeef;
 
-    uc.reg_write(RegisterX86::EAX, eax).unwrap();
-    uc.reg_write(RegisterX86::ESI, esi).unwrap();
+    uc.reg_write(RegisterX86::EAX, eax);
+    uc.reg_write(RegisterX86::ESI, esi);
     uc.mem_map(0x1000, 0x1000, Prot::READ | Prot::EXEC).unwrap();
     uc.mem_map(0x2000, 0x1000, Prot::READ).unwrap();
     uc.mem_protect(0x2000, 0x1000, Prot::READ | Prot::WRITE)
@@ -111,8 +111,8 @@ fn test_splitting_mmio_unmap() {
     uc.emu_start(0x1000, 0x1000 + code.len() as u64, 0, 0)
         .unwrap();
 
-    let ecx = uc.reg_read(RegisterX86::ECX).unwrap();
-    let ebx = uc.reg_read(RegisterX86::EBX).unwrap();
+    let ecx = uc.reg_read(RegisterX86::ECX);
+    let ebx = uc.reg_read(RegisterX86::EBX);
 
     assert_eq!(ecx, 0xdeadbeef);
     assert_eq!(ebx, 0x19260817);
@@ -227,7 +227,7 @@ fn test_mem_protect_mmio() {
         uc.emu_start(0x8000, 0x8000 + code.len() as u64, 0, 0),
         Err(uc_error::WRITE_PROT)
     );
-    let eax = uc.reg_read(RegisterX86::RAX).unwrap();
+    let eax = uc.reg_read(RegisterX86::RAX);
 
     assert_eq!(*uc.get_data_mut(), 1);
     assert_eq!(eax, 0x114514u64);

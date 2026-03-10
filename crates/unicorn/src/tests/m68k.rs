@@ -12,14 +12,14 @@ fn test_move_to_sr() {
 
     let mut uc = uc_common_setup::<_, M68K>(Mode::BIG_ENDIAN, None, &code, ());
 
-    let mut sr = uc.reg_read(RegisterM68K::SR).unwrap();
+    let mut sr = uc.reg_read(RegisterM68K::SR);
     sr |= 0x2000;
-    uc.reg_write(RegisterM68K::SR, sr).unwrap(); // Set supervisor mode
+    uc.reg_write(RegisterM68K::SR, sr); // Set supervisor mode
 
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let sr = uc.reg_read(RegisterM68K::SR).unwrap();
+    let sr = uc.reg_read(RegisterM68K::SR);
     assert_eq!(sr, 0x2700);
 }
 
@@ -36,10 +36,10 @@ fn test_sr_contains_flags() {
     uc.emu_start(CODE_START, code_len_addition.try_into().unwrap(), 0, 0)
         .unwrap();
 
-    let d3 = uc.reg_read(RegisterM68K::D3).unwrap();
+    let d3 = uc.reg_read(RegisterM68K::D3);
     assert_eq!(d3, 0xffffffed);
 
-    let sr = uc.reg_read(RegisterM68K::SR).unwrap();
+    let sr = uc.reg_read(RegisterM68K::SR);
     let is_negative = sr & 0x8 == 0x8;
     assert!(is_negative, "SR should contain negative flag");
 }

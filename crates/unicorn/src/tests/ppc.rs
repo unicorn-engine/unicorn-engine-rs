@@ -14,13 +14,13 @@ fn test_ppc32_add() {
 
     let mut uc = uc_common_setup::<_, Ppc>(Mode::PPC32 | Mode::BIG_ENDIAN, None, &code, ());
 
-    uc.reg_write(RegisterPPC::R3, r3).unwrap();
-    uc.reg_write(RegisterPPC::R6, r6).unwrap();
+    uc.reg_write(RegisterPPC::R3, r3);
+    uc.reg_write(RegisterPPC::R6, r6);
 
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let reg = uc.reg_read(RegisterPPC::R26).unwrap();
+    let reg = uc.reg_read(RegisterPPC::R26);
 
     assert_eq!(reg, 1379);
 }
@@ -38,15 +38,15 @@ fn test_ppc32_fadd() {
     let mut uc = uc_common_setup::<_, Ppc>(Mode::PPC32 | Mode::BIG_ENDIAN, None, &code, ());
 
     msr |= 1 << 13; // Big endian
-    uc.reg_write(RegisterPPC::MSR, msr).unwrap(); // enable FP
+    uc.reg_write(RegisterPPC::MSR, msr); // enable FP
 
-    uc.reg_write(RegisterPPC::FPR4, fpr4).unwrap();
-    uc.reg_write(RegisterPPC::FPR5, fpr5).unwrap();
+    uc.reg_write(RegisterPPC::FPR4, fpr4);
+    uc.reg_write(RegisterPPC::FPR5, fpr5);
 
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let fpr6 = uc.reg_read(RegisterPPC::FPR6).unwrap();
+    let fpr6 = uc.reg_read(RegisterPPC::FPR6);
 
     assert_eq!(fpr6, 0xC052600000000000);
 }
@@ -63,7 +63,7 @@ fn test_ppc32_sc() {
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let pc = uc.reg_read(RegisterPPC::PC).unwrap();
+    let pc = uc.reg_read(RegisterPPC::PC);
 
     assert_eq!(pc, CODE_START + 4);
 }
@@ -73,8 +73,8 @@ fn test_ppc32_cr() {
     let mut uc = uc_common_setup::<_, Ppc>(Mode::PPC32 | Mode::BIG_ENDIAN, None, &[], ());
 
     let mut cr = 0x12345678;
-    uc.reg_write(RegisterPPC::CR, cr).unwrap();
-    cr = uc.reg_read(RegisterPPC::CR).unwrap();
+    uc.reg_write(RegisterPPC::CR, cr);
+    cr = uc.reg_read(RegisterPPC::CR);
 
     assert_eq!(cr, 0x12345678);
 }
