@@ -239,8 +239,7 @@ fn test_tlb_clear() {
     ];
 
     let mut uc = Unicorn::<_, X86>::new_with_data(Mode::MODE_64, 0usize).unwrap();
-    uc.mem_map(CODE_START, CODE_LEN.try_into().unwrap(), Prot::ALL)
-        .unwrap();
+    uc.mem_map(CODE_START, CODE_LEN, Prot::ALL).unwrap();
     uc.mem_write(CODE_START, code).unwrap();
 
     uc.mem_map(0x200000, 0x1000, Prot::ALL).unwrap();
@@ -279,7 +278,7 @@ fn test_noexec() {
     uc.mem_write(CODE_START, code).unwrap();
 
     uc.ctl_set_tlb_type(TlbType::VIRTUAL).unwrap();
-    uc.mem_protect(CODE_START, CODE_START as u64 + 0x1000, Prot::EXEC)
+    uc.mem_protect(CODE_START, CODE_START + 0x1000, Prot::EXEC)
         .unwrap();
 
     let err = uc

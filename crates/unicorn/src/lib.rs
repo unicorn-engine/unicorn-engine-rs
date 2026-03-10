@@ -98,28 +98,28 @@ pub struct MmioCallbackScope<'a> {
 }
 
 impl MmioCallbackScope<'_> {
-    fn has_regions(&self) -> bool {
+    const fn has_regions(&self) -> bool {
         !self.regions.is_empty()
     }
 
     fn unmap(&mut self, begin: u64, size: u64) {
-        let end: u64 = begin + size as u64;
+        let end: u64 = begin + size;
         self.regions = self
             .regions
             .iter()
             .flat_map(|(b, s)| {
-                let e = b + *s as u64;
+                let e = b + *s;
                 if begin > *b {
                     if begin >= e {
                         // The unmapped region is completely after this region
                         vec![(*b, *s)]
                     } else if end >= e {
                         // The unmapped region overlaps with the end of this region
-                        vec![(*b, (begin - *b) as u64)]
+                        vec![(*b, begin - *b)]
                     } else {
                         // The unmapped region is in the middle of this region
                         let second_b = end + 1;
-                        vec![(*b, (begin - *b) as u64), (second_b, (e - second_b) as u64)]
+                        vec![(*b, begin - *b), (second_b, e - second_b)]
                     }
                 } else if end > *b {
                     if end >= e {
@@ -127,7 +127,7 @@ impl MmioCallbackScope<'_> {
                         vec![]
                     } else {
                         // The unmapped region overlaps with the start of this region
-                        vec![(end, (e - end) as u64)]
+                        vec![(end, e - end)]
                     }
                 } else {
                     // The unmapped region is completely before this region
@@ -194,7 +194,7 @@ where
     /// and hardware mode.
     pub fn new_with_data(mode: Mode, data: D) -> Result<Self, uc_error> {
         let mut handle = ptr::null_mut();
-        unsafe { uc_open(A::arch(), mode, &mut handle) }.and_then(|| {
+        unsafe { uc_open(A::arch(), mode, &raw mut handle) }.and_then(|| {
             Ok(Unicorn {
                 inner: Rc::new(UnsafeCell::from(UnicornInner {
                     handle,
@@ -219,7 +219,7 @@ where
             return Err(uc_error::HANDLE);
         }
         let mut arch = 0;
-        let err = unsafe { uc_query(handle, Query::ARCH, &mut arch) };
+        let err = unsafe { uc_query(handle, Query::ARCH, &raw mut arch) };
         if err != uc_error::OK {
             return Err(err);
         }
@@ -290,16 +290,15 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
     pub fn mem_regions(&self) -> Result<Vec<MemRegion>, uc_error> {
         let mut nb_regions = 0;
         let mut p_regions = ptr::null_mut();
-        unsafe { uc_mem_regions(self.get_handle(), &raw mut p_regions, &mut nb_regions) }.and_then(
-            || {
+        unsafe { uc_mem_regions(self.get_handle(), &raw mut p_regions, &raw mut nb_regions) }
+            .and_then(|| {
                 let mut regions = Vec::new();
                 for i in 0..nb_regions {
                     regions.push(unsafe { core::mem::transmute_copy(&*p_regions.add(i as usize)) });
                 }
                 unsafe { uc_free(p_regions.cast()) };
                 Ok(regions)
-            },
-        )
+            })
     }
 
     /// Read a range of bytes from memory at the specified emulated physical address.
@@ -336,7 +335,7 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 self.get_handle(),
                 address,
                 prot,
-                buf.as_mut_ptr() as _,
+                buf.as_mut_ptr().cast::<c_void>(),
                 buf.len(),
             )
         }
@@ -356,7 +355,7 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 self.get_handle(),
                 address,
                 prot,
-                buf.as_mut_ptr() as _,
+                buf.as_mut_ptr().cast::<c_void>(),
                 buf.len(),
             )
         }
@@ -384,7 +383,7 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 address,
                 prot,
                 bytes.as_ptr().cast(),
-                bytes.len().try_into().unwrap(),
+                bytes.len(),
             )
         }
         .into()
@@ -393,11 +392,11 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
     /// translate virtual to physical address
     pub fn vmem_translate(&mut self, address: u64, prot: Prot) -> Result<u64, uc_error> {
         let mut physical: u64 = 0;
-        let err = unsafe { uc_vmem_translate(self.get_handle(), address, prot, &mut physical) };
+        let err = unsafe { uc_vmem_translate(self.get_handle(), address, prot, &raw mut physical) };
         if err != uc_error::OK {
             return Err(err);
         }
-        return Ok(physical);
+        Ok(physical)
     }
 
     /// Map an existing memory region in the emulator at the specified address.
@@ -486,11 +485,10 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
             )
         }
         .and_then(|| {
-            let u64_size: u64 = size.try_into().unwrap();
             let rd = read_data.map(|c| c as Box<dyn hook::IsUcHook>);
             let wd = write_data.map(|c| c as Box<dyn hook::IsUcHook>);
             self.inner_mut().mmio_callbacks.push(MmioCallbackScope {
-                regions: vec![(address, u64_size)],
+                regions: vec![(address, size)],
                 read_callback: rd,
                 write_callback: wd,
             });
@@ -873,7 +871,7 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
 
     /// Add hook for edge generated event.
     ///
-    /// Callback parameters: (uc, cur_tb, prev_tb)
+    /// Callback parameters: (uc, `cur_tb`, `prev_tb`)
     pub fn add_edge_gen_hook<F>(
         &mut self,
         begin: u64,
@@ -993,7 +991,7 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
     /// supported: `MODE`, `PAGE_SIZE`, `ARCH`
     pub fn query(&self, query: Query) -> Result<usize, uc_error> {
         let mut result = 0;
-        unsafe { uc_query(self.get_handle(), query, &mut result) }.and(Ok(result))
+        unsafe { uc_query(self.get_handle(), query, &raw mut result) }.and(Ok(result))
     }
 
     /// Gets the current program counter for this `unicorn` instance.
