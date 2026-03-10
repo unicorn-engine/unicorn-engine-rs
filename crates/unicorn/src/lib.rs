@@ -57,29 +57,29 @@ pub mod hook; // lets consumers call hooks
 mod tests;
 
 #[derive(Debug)]
-pub struct Context {
+pub struct Context<A: UcArch> {
     context: *mut uc_context,
+    arch: PhantomData<A>,
 }
 
-impl Context {
+impl<A: UcArch> Context<A> {
     #[must_use]
     pub const fn is_initialized(&self) -> bool {
         !self.context.is_null()
     }
 
-    pub fn reg_read<T: Into<i32>>(&self, regid: T) -> Result<u64, uc_error> {
+    pub fn reg_read(&self, reg: A::Reg) -> Result<u64, uc_error> {
         let mut value = 0;
-        unsafe { uc_context_reg_read(self.context, regid.into(), (&raw mut value).cast()) }
+        unsafe { uc_context_reg_read(self.context, reg.id(), (&raw mut value).cast()) }
             .and(Ok(value))
     }
 
-    pub fn reg_write<T: Into<i32>>(&mut self, regid: T, value: u64) -> Result<(), uc_error> {
-        unsafe { uc_context_reg_write(self.context, regid.into(), (&raw const value).cast()) }
-            .into()
+    pub fn reg_write(&mut self, reg: A::Reg, value: u64) -> Result<(), uc_error> {
+        unsafe { uc_context_reg_write(self.context, reg.id(), (&raw const value).cast()) }.into()
     }
 }
 
-impl Drop for Context {
+impl<A: UcArch> Drop for Context<A> {
     fn drop(&mut self) {
         if self.is_initialized() {
             unsafe {
@@ -566,25 +566,19 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
     /// Write values into batch of registers
     pub fn reg_write_batch<T>(
         &self,
-        regids: &[T],
+        regs: &[A::Reg],
         values: &[u64],
         count: i32,
-    ) -> Result<(), uc_error>
-    where
-        T: Copy + Into<i32>,
-    {
+    ) -> Result<(), uc_error> {
         let mut values_ptrs = vec![core::ptr::null::<u64>(); count as usize];
-        let mut regids = regids
-            .iter()
-            .map(|regid| (*regid).into())
-            .collect::<Vec<i32>>();
+        let mut regs = regs.iter().map(|regid| (*regid).id()).collect::<Vec<i32>>();
         for i in 0..values.len() {
             values_ptrs[i] = &raw const values[i];
         }
         unsafe {
             uc_reg_write_batch(
                 self.get_handle(),
-                regids.as_mut_ptr(),
+                regs.as_mut_ptr(),
                 values_ptrs.as_ptr().cast::<*mut c_void>(),
                 count,
             )
@@ -596,8 +590,8 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
     ///
     /// The user has to make sure that the buffer length matches the register size.
     /// This adds support for registers >64 bit (GDTR/IDTR, XMM, YMM, ZMM (x86); Q, V (arm64)).
-    pub fn reg_write_long<T: Into<i32>>(&self, regid: T, value: &[u8]) -> Result<(), uc_error> {
-        unsafe { uc_reg_write(self.get_handle(), regid.into(), value.as_ptr().cast()) }.into()
+    pub fn reg_write_long(&self, reg: A::Reg, value: &[u8]) -> Result<(), uc_error> {
+        unsafe { uc_reg_write(self.get_handle(), reg.id(), value.as_ptr().cast()) }.into()
     }
 
     /// Read an unsigned value from a register.
@@ -611,23 +605,17 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
     /// Read batch of registers
     ///
     /// Not to be used with registers larger than 64 bit
-    pub fn reg_read_batch<T>(&self, regids: &mut [T], count: i32) -> Result<Vec<u64>, uc_error>
-    where
-        T: Copy + Into<i32>,
-    {
+    pub fn reg_read_batch(&self, regs: &mut [A::Reg], count: i32) -> Result<Vec<u64>, uc_error> {
         unsafe {
             let mut addrs_vec = vec![0u64; count as usize];
             let addrs = addrs_vec.as_mut_slice();
-            let mut regids = regids
-                .iter()
-                .map(|regid| (*regid).into())
-                .collect::<Vec<i32>>();
+            let mut regs = regs.iter().map(|regid| (*regid).id()).collect::<Vec<i32>>();
             for i in 0..count {
                 addrs[i as usize] = &raw mut addrs[i as usize] as u64;
             }
             let res = uc_reg_read_batch(
                 self.get_handle(),
-                regids.as_mut_ptr(),
+                regs.as_mut_ptr(),
                 addrs.as_mut_ptr().cast::<*mut c_void>(),
                 count,
             );
@@ -642,8 +630,8 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
     ///
     /// This adds safe support for registers >64 bit (GDTR/IDTR, XMM, YMM, ZMM, ST (x86); Q, V
     /// (arm64)).
-    pub fn reg_read_long<T: Into<i32>>(&self, regid: T) -> Result<Box<[u8]>, uc_error> {
-        let curr_reg_id = regid.into();
+    pub fn reg_read_long(&self, reg: A::Reg) -> Result<Box<[u8]>, uc_error> {
+        let curr_reg_id = reg.id();
         let curr_arch = self.get_arch();
 
         let value_size = match curr_arch {
@@ -763,10 +751,9 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
     }
 
     /// Read a signed 32-bit value from a register.
-    pub fn reg_read_i32<T: Into<i32>>(&self, regid: T) -> Result<i32, uc_error> {
+    pub fn reg_read_i32(&self, reg: A::Reg) -> Result<i32, uc_error> {
         let mut value = 0;
-        unsafe { uc_reg_read(self.get_handle(), regid.into(), (&raw mut value).cast()) }
-            .and(Ok(value))
+        unsafe { uc_reg_read(self.get_handle(), reg.id(), (&raw mut value).cast()) }.and(Ok(value))
     }
 
     /// Add a code hook.
@@ -1193,15 +1180,16 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
     /// Allocate and return an empty Unicorn context.
     ///
     /// To be populated via `context_save`.
-    pub fn context_alloc(&self) -> Result<Context, uc_error> {
+    pub fn context_alloc(&self) -> Result<Context<A>, uc_error> {
         let mut empty_context = ptr::null_mut();
         unsafe { uc_context_alloc(self.get_handle(), &raw mut empty_context) }.and(Ok(Context {
             context: empty_context,
+            arch: PhantomData,
         }))
     }
 
     /// Save current Unicorn context to previously allocated Context struct.
-    pub fn context_save(&self, context: &mut Context) -> Result<(), uc_error> {
+    pub fn context_save(&self, context: &mut Context<A>) -> Result<(), uc_error> {
         unsafe { uc_context_save(self.get_handle(), context.context) }.into()
     }
 
@@ -1210,13 +1198,14 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
     /// This can be used for fast rollbacks with `context_restore`.
     /// In case of many non-concurrent context saves, use `context_alloc` and *_save
     /// individually to avoid unnecessary allocations.
-    pub fn context_init(&self) -> Result<Context, uc_error> {
+    pub fn context_init(&self) -> Result<Context<A>, uc_error> {
         let mut new_context = ptr::null_mut();
         unsafe {
             uc_context_alloc(self.get_handle(), &raw mut new_context).and_then(|| {
                 uc_context_save(self.get_handle(), new_context)
                     .and(Ok(Context {
                         context: new_context,
+                        arch: PhantomData,
                     }))
                     .inspect_err(|_| {
                         uc_context_free(new_context);
@@ -1230,7 +1219,7 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
     /// Perform a quick rollback of the CPU context, including registers and some
     /// internal metadata. Contexts may not be shared across engine instances with
     /// differing arches or modes. Memory has to be restored manually, if needed.
-    pub fn context_restore(&self, context: &Context) -> Result<(), uc_error> {
+    pub fn context_restore(&self, context: &Context<A>) -> Result<(), uc_error> {
         unsafe { uc_context_restore(self.get_handle(), context.context) }.into()
     }
 
