@@ -136,7 +136,7 @@ fn test_arm64_mrs_hook() {
         (),
     );
 
-    uc.add_insn_sys_hook_arm64(Arm64Insn::UC_ARM64_INS_MRS, 1, 0, |uc, reg, _| {
+    uc.add_insn_sys_hook(Arm64Insn::UC_ARM64_INS_MRS, 1, 0, |uc, reg, _| {
         let x2 = 0x114514;
         uc.reg_write(reg, x2);
 
