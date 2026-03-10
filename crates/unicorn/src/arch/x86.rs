@@ -62,4 +62,64 @@ impl<'a, D> Unicorn<'a, D, X86> {
             Ok(hook_id)
         })
     }
+
+    /// Add hook for x86 IN instruction.
+    pub fn add_insn_in_hook<F>(&mut self, callback: F) -> Result<UcHookId, uc_error>
+    where
+        F: FnMut(&mut Unicorn<D, X86>, u32, usize) -> u32 + 'a,
+    {
+        let mut hook_id = 0;
+        let mut user_data = Box::new(hook::UcHook {
+            callback,
+            uc: Rc::downgrade(&self.inner),
+        });
+
+        unsafe {
+            uc_hook_add(
+                self.get_handle(),
+                (&raw mut hook_id).cast(),
+                HookType::INSN.0 as i32,
+                hook::insn_in_hook_proxy::<D, F, X86> as _,
+                core::ptr::from_mut(user_data.as_mut()).cast(),
+                0,
+                0,
+                X86Insn::IN,
+            )
+        }
+        .and_then(|| {
+            let hook_id = UcHookId(hook_id);
+            self.inner_mut().hooks.push((hook_id, user_data));
+            Ok(hook_id)
+        })
+    }
+
+    /// Add hook for x86 OUT instruction.
+    pub fn add_insn_out_hook<F>(&mut self, callback: F) -> Result<UcHookId, uc_error>
+    where
+        F: FnMut(&mut Unicorn<D, X86>, u32, usize, u32) + 'a,
+    {
+        let mut hook_id = 0;
+        let mut user_data = Box::new(hook::UcHook {
+            callback,
+            uc: Rc::downgrade(&self.inner),
+        });
+
+        unsafe {
+            uc_hook_add(
+                self.get_handle(),
+                (&raw mut hook_id).cast(),
+                HookType::INSN.0 as i32,
+                hook::insn_out_hook_proxy::<D, F, X86> as _,
+                core::ptr::from_mut(user_data.as_mut()).cast(),
+                0,
+                0,
+                X86Insn::OUT,
+            )
+        }
+        .and_then(|| {
+            let hook_id = UcHookId(hook_id);
+            self.inner_mut().hooks.push((hook_id, user_data));
+            Ok(hook_id)
+        })
+    }
 }
