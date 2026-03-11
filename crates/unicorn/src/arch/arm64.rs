@@ -1,3 +1,5 @@
+pub mod long_register;
+
 use alloc::{boxed::Box, rc::Rc};
 use unicorn_engine_sys::{
     Arm64Insn, HookType, Mode, RegisterARM64, RegisterARM64CP, uc_error, uc_hook_add, uc_reg_read,
@@ -79,29 +81,5 @@ impl<'a, D> Unicorn<'a, D, Arm64> {
             self.inner_mut().hooks.push((hook_id, user_data));
             Ok(hook_id)
         })
-    }
-
-    fn value_size(curr_reg_id: i32) -> Result<usize, uc_error> {
-        match curr_reg_id {
-            r if (RegisterARM64::Q0 as i32..=RegisterARM64::Q31 as i32).contains(&r)
-                || (RegisterARM64::V0 as i32..=RegisterARM64::V31 as i32).contains(&r) =>
-            {
-                Ok(16)
-            }
-            _ => Err(uc_error::ARG),
-        }
-    }
-
-    /// Read 128, 256 or 512 bit register value into heap allocated byte array.
-    ///
-    /// This adds safe support for registers >64 bit Q, V.
-    // todo: reg should be limited to large registers only
-    pub fn reg_read_long(&self, reg: RegisterARM64) -> Result<Box<[u8]>, uc_error> {
-        let curr_reg_id = reg.id();
-
-        let value_size = Self::value_size(curr_reg_id)?;
-        let mut value = vec![0; value_size];
-        unsafe { uc_reg_read(self.get_handle(), curr_reg_id, value.as_mut_ptr().cast()) }
-            .and_then(|| Ok(value.into_boxed_slice()))
     }
 }

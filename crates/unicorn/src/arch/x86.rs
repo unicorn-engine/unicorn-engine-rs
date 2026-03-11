@@ -1,7 +1,7 @@
+pub mod long_register;
+
 use alloc::{boxed::Box, rc::Rc};
-use unicorn_engine_sys::{
-    HookType, Mode, RegisterX86, X86Insn, uc_error, uc_hook_add, uc_reg_read,
-};
+use unicorn_engine_sys::{HookType, Mode, RegisterX86, X86Insn, uc_error, uc_hook_add};
 
 use crate::{
     UcHookId, Unicorn,
@@ -123,33 +123,5 @@ impl<'a, D> Unicorn<'a, D, X86> {
             self.inner_mut().hooks.push((hook_id, user_data));
             Ok(hook_id)
         })
-    }
-
-    fn value_size(curr_reg_id: i32) -> Result<usize, uc_error> {
-        match curr_reg_id {
-            r if (RegisterX86::XMM0 as i32..=RegisterX86::XMM31 as i32).contains(&r) => Ok(16),
-            r if (RegisterX86::YMM0 as i32..=RegisterX86::YMM31 as i32).contains(&r) => Ok(32),
-            r if (RegisterX86::ZMM0 as i32..=RegisterX86::ZMM31 as i32).contains(&r) => Ok(64),
-            r if r == RegisterX86::GDTR as i32
-                || r == RegisterX86::IDTR as i32
-                || (RegisterX86::ST0 as i32..=RegisterX86::ST7 as i32).contains(&r) =>
-            {
-                Ok(10)
-            }
-            _ => Err(uc_error::ARG),
-        }
-    }
-
-    /// Read 128, 256 or 512 bit register value into heap allocated byte array.
-    ///
-    /// This adds safe support for registers >64 bit (GDTR/IDTR, XMM, YMM, ZMM, ST
-    // todo: reg should be limited to large registers only
-    pub fn reg_read_long(&self, reg: RegisterX86) -> Result<Box<[u8]>, uc_error> {
-        let curr_reg_id = reg.id();
-
-        let value_size = Self::value_size(curr_reg_id)?;
-        let mut value = vec![0; value_size];
-        unsafe { uc_reg_read(self.get_handle(), curr_reg_id, value.as_mut_ptr().cast()) }
-            .and_then(|| Ok(value.into_boxed_slice()))
     }
 }

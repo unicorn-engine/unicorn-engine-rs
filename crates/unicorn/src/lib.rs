@@ -45,11 +45,11 @@ use core::{cell::UnsafeCell, ffi::c_void, marker::PhantomData, ptr};
 
 #[macro_use]
 pub mod unicorn_const;
+pub mod arch;
+pub mod hook;
+pub mod long_register; // lets consumers call hooks
 pub use arch::*;
 pub use unicorn_const::*;
-
-pub mod arch;
-pub mod hook; // lets consumers call hooks
 
 #[cfg(test)]
 mod tests;
@@ -164,7 +164,7 @@ impl<D, A: UcArch> Drop for UnicornInner<'_, D, A> {
 /// A Unicorn emulator instance.
 ///
 /// You could clone this instance cheaply, since it has an `Rc` inside.
-pub struct Unicorn<'a, D: 'a, A: UcArch + 'a> {
+pub struct Unicorn<'a, D: 'a, A: UcArch> {
     inner: Rc<UnsafeCell<UnicornInner<'a, D, A>>>,
 }
 
@@ -580,16 +580,6 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
         }
         .and(Ok(()))
         .expect("write to a valid register should never fail");
-    }
-
-    /// Write variable sized values into registers.
-    ///
-    /// The user has to make sure that the buffer length matches the register size.
-    /// This adds support for registers >64 bit (GDTR/IDTR, XMM, YMM, ZMM (x86); Q, V (arm64)).
-    pub fn reg_write_long(&self, reg: A::Reg, value: &[u8]) {
-        unsafe { uc_reg_write(self.get_handle(), reg.id(), value.as_ptr().cast()) }
-            .and(Ok(()))
-            .expect("write to a valid register should never fail");
     }
 
     /// Read an unsigned value from a register.
