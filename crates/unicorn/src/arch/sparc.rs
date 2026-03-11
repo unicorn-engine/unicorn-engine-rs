@@ -1,6 +1,6 @@
-use unicorn_engine_sys::{Mode, RegisterSPARC, uc_error};
+use unicorn_engine_sys::{Mode, RegisterSPARC};
 
-use crate::arch::{Register, UcArch};
+use crate::arch::{Register, UcArch, UcResult};
 
 pub enum Sparc {}
 

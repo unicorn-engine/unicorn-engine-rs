@@ -1,6 +1,6 @@
 use unicorn_engine_sys::RegisterRISCV;
 
-use crate::arch::riscv::RiscV;
+use crate::{UcError, arch::riscv::RiscV};
 
 use super::*;
 
@@ -492,7 +492,7 @@ fn test_riscv_correct_address_in_small_jump_hook() {
     let err = uc
         .emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap_err();
-    assert_eq!(err, uc_error::FETCH_UNMAPPED);
+    assert_eq!(err, UcError::FetchUnmapped);
 
     let x5 = uc.reg_read(RegisterRISCV::X5);
     let pc = uc.reg_read(RegisterRISCV::PC);
@@ -529,7 +529,7 @@ fn test_riscv_correct_address_in_long_jump_hook() {
     let err = uc
         .emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap_err();
-    assert_eq!(err, uc_error::FETCH_UNMAPPED);
+    assert_eq!(err, UcError::FetchUnmapped);
 
     let x5 = uc.reg_read(RegisterRISCV::X5);
     let pc = uc.reg_read(RegisterRISCV::PC);
@@ -667,7 +667,7 @@ fn test_riscv_priv() {
     let err = uc
         .emu_start(main_address, main_end_address, 0, 0)
         .unwrap_err();
-    assert_eq!(err, uc_error::EXCEPTION);
+    assert_eq!(err, UcError::CpuException);
     pc = uc.reg_read(RegisterRISCV::PC);
     assert_eq!(pc, main_address + 4);
 

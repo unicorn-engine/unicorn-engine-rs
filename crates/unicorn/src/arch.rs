@@ -1,4 +1,6 @@
-use unicorn_engine_sys::{Mode, uc_error};
+use unicorn_engine_sys::Mode;
+
+use crate::UcResult;
 
 // 'static bound here so we don't need to repeat it in functions that accept callbacks
 // Arch is an empty enum, so it's trivially 'static
@@ -12,7 +14,7 @@ pub trait Register: Copy {
     fn id(self) -> i32;
 
     // todo: make Mode a generic parameter, so Result return type isn't needed
-    fn pc(mode: Mode) -> Result<Self, uc_error>;
+    fn pc(mode: Mode) -> UcResult<Self>;
 }
 
 #[macro_export]
@@ -36,7 +38,7 @@ macro_rules! impl_reg_pc_counter {
                 self as i32
             }
 
-            fn pc(_: Mode) -> Result<Self, uc_error> {
+            fn pc(_: Mode) -> UcResult<Self> {
                 Ok(Self::PC)
             }
         }

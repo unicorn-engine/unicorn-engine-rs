@@ -1,6 +1,6 @@
-use unicorn_engine_sys::{Mode, RegisterTRICORE, uc_error};
+use unicorn_engine_sys::{Mode, RegisterTRICORE};
 
-use crate::arch::{Register, UcArch};
+use crate::arch::{Register, UcArch, UcResult};
 
 pub enum Tricore {}
 

@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 use unicorn_engine_sys::{RegisterX86, X86Insn};
 
 use super::*;
-use crate::{Unicorn, arch::x86::X86};
+use crate::{UcError, Unicorn, arch::x86::X86};
 
 #[test]
 fn test_uc_ctl_mode() {
@@ -284,5 +284,5 @@ fn test_noexec() {
     let err = uc
         .emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap_err();
-    assert_eq!(err, uc_error::READ_PROT);
+    assert_eq!(err, UcError::ReadProt);
 }

@@ -1,6 +1,6 @@
-use unicorn_engine_sys::{Mode, RegisterS390X, uc_error};
+use unicorn_engine_sys::{Mode, RegisterS390X};
 
-use crate::arch::{Register, UcArch};
+use crate::arch::{Register, UcArch, UcResult};
 
 pub enum S390X {}
 

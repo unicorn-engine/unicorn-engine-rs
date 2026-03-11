@@ -46,9 +46,11 @@ use core::{cell::UnsafeCell, ffi::c_void, marker::PhantomData, ptr};
 #[macro_use]
 pub mod unicorn_const;
 pub mod arch;
+pub mod error;
 pub mod hook;
 pub mod long_register; // lets consumers call hooks
 pub use arch::*;
+pub use error::*;
 pub use unicorn_const::*;
 
 #[cfg(test)]
@@ -69,13 +71,13 @@ impl<A: UcArch> Context<A> {
     pub fn reg_read(&self, reg: A::Reg) -> u64 {
         let mut value = 0;
         unsafe { uc_context_reg_read(self.context, reg.id(), (&raw mut value).cast()) }
-            .and(Ok(value))
+            .result_with(value)
             .expect("read of a valid register should never fail")
     }
 
     pub fn reg_write(&mut self, reg: A::Reg, value: u64) {
         unsafe { uc_context_reg_write(self.context, reg.id(), (&raw const value).cast()) }
-            .and(Ok(()))
+            .result()
             .expect("write to a valid register should never fail");
     }
 }
@@ -171,7 +173,7 @@ pub struct Unicorn<'a, D: 'a, A: UcArch> {
 impl<'a, A: UcArch> Unicorn<'a, (), A> {
     /// Create a new instance of the unicorn engine for the specified architecture
     /// and hardware mode.
-    pub fn new(mode: Mode) -> Result<Unicorn<'a, (), A>, uc_error> {
+    pub fn new(mode: Mode) -> UcResult<Unicorn<'a, (), A>> {
         Self::new_with_data(mode, ())
     }
 
@@ -181,7 +183,7 @@ impl<'a, A: UcArch> Unicorn<'a, (), A> {
     /// Calling the function with a non null pointer value that
     /// does not point to a unicorn instance will cause undefined
     /// behavior.
-    pub unsafe fn from_handle(handle: *mut uc_engine) -> Result<Unicorn<'a, (), A>, uc_error> {
+    pub unsafe fn from_handle(handle: *mut uc_engine) -> UcResult<Unicorn<'a, (), A>> {
         unsafe { Self::from_handle_with_data(handle, ()) }
     }
 }
@@ -192,19 +194,18 @@ where
 {
     /// Create a new instance of the unicorn engine for the specified architecture
     /// and hardware mode.
-    pub fn new_with_data(mode: Mode, data: D) -> Result<Self, uc_error> {
+    pub fn new_with_data(mode: Mode, data: D) -> UcResult<Self> {
         let mut handle = ptr::null_mut();
-        unsafe { uc_open(A::arch(), mode, &raw mut handle) }.and_then(|| {
-            Ok(Unicorn {
-                inner: Rc::new(UnsafeCell::from(UnicornInner {
-                    handle,
-                    ffi: false,
-                    arch: PhantomData,
-                    data,
-                    hooks: vec![],
-                    mmio_callbacks: vec![],
-                })),
-            })
+        unsafe { uc_open(A::arch(), mode, &raw mut handle) }.result()?;
+        Ok(Unicorn {
+            inner: Rc::new(UnsafeCell::from(UnicornInner {
+                handle,
+                ffi: false,
+                arch: PhantomData,
+                data,
+                hooks: vec![],
+                mmio_callbacks: vec![],
+            })),
         })
     }
 
@@ -214,15 +215,12 @@ where
     /// Calling the function with a non null pointer value that
     /// does not point to a unicorn instance will cause undefined
     /// behavior.
-    pub unsafe fn from_handle_with_data(handle: *mut uc_engine, data: D) -> Result<Self, uc_error> {
+    pub unsafe fn from_handle_with_data(handle: *mut uc_engine, data: D) -> UcResult<Self> {
         if handle.is_null() {
-            return Err(uc_error::HANDLE);
+            return Err(UcError::InvalidHandle);
         }
         let mut arch = 0;
-        let err = unsafe { uc_query(handle, Query::ARCH, &raw mut arch) };
-        if err != uc_error::OK {
-            return Err(err);
-        }
+        unsafe { uc_query(handle, Query::ARCH, &raw mut arch) }.result()?;
         Ok(Unicorn {
             inner: Rc::new(UnsafeCell::from(UnicornInner {
                 handle,
@@ -287,22 +285,21 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
     }
 
     /// Returns a vector with the memory regions that are mapped in the emulator.
-    pub fn mem_regions(&self) -> Result<Vec<MemRegion>, uc_error> {
+    pub fn mem_regions(&self) -> UcResult<Vec<MemRegion>> {
         let mut nb_regions = 0;
         let mut p_regions = ptr::null_mut();
         unsafe { uc_mem_regions(self.get_handle(), &raw mut p_regions, &raw mut nb_regions) }
-            .and_then(|| {
-                let mut regions = Vec::new();
-                for i in 0..nb_regions {
-                    regions.push(unsafe { core::mem::transmute_copy(&*p_regions.add(i as usize)) });
-                }
-                unsafe { uc_free(p_regions.cast()) };
-                Ok(regions)
-            })
+            .result()?;
+        let mut regions = Vec::new();
+        for i in 0..nb_regions {
+            regions.push(unsafe { core::mem::transmute_copy(&*p_regions.add(i as usize)) });
+        }
+        unsafe { uc_free(p_regions.cast()) };
+        Ok(regions)
     }
 
     /// Read a range of bytes from memory at the specified emulated physical address.
-    pub fn mem_read(&self, address: u64, buf: &mut [u8]) -> Result<(), uc_error> {
+    pub fn mem_read(&self, address: u64, buf: &mut [u8]) -> UcResult<()> {
         unsafe {
             uc_mem_read(
                 self.get_handle(),
@@ -311,11 +308,11 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 buf.len().try_into().unwrap(),
             )
         }
-        .into()
+        .result()
     }
 
     /// Return a range of bytes from memory at the specified emulated physical address as vector.
-    pub fn mem_read_as_vec(&self, address: u64, size: usize) -> Result<Vec<u8>, uc_error> {
+    pub fn mem_read_as_vec(&self, address: u64, size: usize) -> UcResult<Vec<u8>> {
         let mut buf = vec![0; size];
         unsafe {
             uc_mem_read(
@@ -325,11 +322,11 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 size.try_into().unwrap(),
             )
         }
-        .and(Ok(buf))
+        .result_with(buf)
     }
 
     /// Read a range of bytes from memory at the specified emulated virtual address.
-    pub fn vmem_read(&self, address: u64, prot: Prot, buf: &mut [u8]) -> Result<(), uc_error> {
+    pub fn vmem_read(&self, address: u64, prot: Prot, buf: &mut [u8]) -> UcResult<()> {
         unsafe {
             uc_vmem_read(
                 self.get_handle(),
@@ -339,16 +336,11 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 buf.len(),
             )
         }
-        .into()
+        .result()
     }
 
     /// Return a range of bytes from memory at the specified emulated virtual address as vector.
-    pub fn vmem_read_as_vec(
-        &self,
-        address: u64,
-        prot: Prot,
-        size: usize,
-    ) -> Result<Vec<u8>, uc_error> {
+    pub fn vmem_read_as_vec(&self, address: u64, prot: Prot, size: usize) -> UcResult<Vec<u8>> {
         let mut buf = vec![0; size];
         unsafe {
             uc_vmem_read(
@@ -359,11 +351,11 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 buf.len(),
             )
         }
-        .and(Ok(buf))
+        .result_with(buf)
     }
 
     /// Write the data in `bytes` to the emulated physical address `address`
-    pub fn mem_write(&mut self, address: u64, bytes: &[u8]) -> Result<(), uc_error> {
+    pub fn mem_write(&mut self, address: u64, bytes: &[u8]) -> UcResult<()> {
         unsafe {
             uc_mem_write(
                 self.get_handle(),
@@ -372,11 +364,11 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 bytes.len().try_into().unwrap(),
             )
         }
-        .into()
+        .result()
     }
 
     /// Write the data in `bytes` to the emulated virtual address
-    pub fn vmem_write(&mut self, address: u64, prot: Prot, bytes: &[u8]) -> Result<(), uc_error> {
+    pub fn vmem_write(&mut self, address: u64, prot: Prot, bytes: &[u8]) -> UcResult<()> {
         unsafe {
             uc_vmem_write(
                 self.get_handle(),
@@ -386,16 +378,14 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 bytes.len(),
             )
         }
-        .into()
+        .result()
     }
 
     /// translate virtual to physical address
-    pub fn vmem_translate(&mut self, address: u64, prot: Prot) -> Result<u64, uc_error> {
+    pub fn vmem_translate(&mut self, address: u64, prot: Prot) -> UcResult<u64> {
         let mut physical: u64 = 0;
-        let err = unsafe { uc_vmem_translate(self.get_handle(), address, prot, &raw mut physical) };
-        if err != uc_error::OK {
-            return Err(err);
-        }
+        unsafe { uc_vmem_translate(self.get_handle(), address, prot, &raw mut physical) }
+            .result()?;
         Ok(physical)
     }
 
@@ -418,16 +408,16 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
         size: u64,
         perms: Prot,
         ptr: *mut c_void,
-    ) -> Result<(), uc_error> {
-        unsafe { uc_mem_map_ptr(self.get_handle(), address, size, perms.0 as _, ptr).into() }
+    ) -> UcResult<()> {
+        unsafe { uc_mem_map_ptr(self.get_handle(), address, size, perms.0 as _, ptr).result() }
     }
 
     /// Map a memory region in the emulator at the specified address.
     ///
     /// `address` must be aligned to 4kb or this will return `Error::ARG`.
     /// `size` must be a multiple of 4kb or this will return `Error::ARG`.
-    pub fn mem_map(&mut self, address: u64, size: u64, perms: Prot) -> Result<(), uc_error> {
-        unsafe { uc_mem_map(self.get_handle(), address, size, perms.0 as _) }.into()
+    pub fn mem_map(&mut self, address: u64, size: u64, perms: Prot) -> UcResult<()> {
+        unsafe { uc_mem_map(self.get_handle(), address, size, perms.0 as _) }.result()
     }
 
     /// Map in am MMIO region backed by callbacks.
@@ -440,7 +430,7 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
         size: u64,
         read_callback: Option<R>,
         write_callback: Option<W>,
-    ) -> Result<(), uc_error>
+    ) -> UcResult<()>
     where
         R: FnMut(&mut Unicorn<'_, D, A>, u64, usize) -> u64 + 'a,
         W: FnMut(&mut Unicorn<'_, D, A>, u64, usize, u64) + 'a,
@@ -484,24 +474,24 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 user_data_write,
             )
         }
-        .and_then(|| {
-            let rd = read_data.map(|c| c as Box<dyn hook::IsUcHook>);
-            let wd = write_data.map(|c| c as Box<dyn hook::IsUcHook>);
-            self.inner_mut().mmio_callbacks.push(MmioCallbackScope {
-                regions: vec![(address, size)],
-                read_callback: rd,
-                write_callback: wd,
-            });
+        .result()?;
 
-            Ok(())
-        })
+        let rd = read_data.map(|c| c as Box<dyn hook::IsUcHook>);
+        let wd = write_data.map(|c| c as Box<dyn hook::IsUcHook>);
+        self.inner_mut().mmio_callbacks.push(MmioCallbackScope {
+            regions: vec![(address, size)],
+            read_callback: rd,
+            write_callback: wd,
+        });
+
+        Ok(())
     }
 
     /// Map in a read-only MMIO region backed by a callback.
     ///
     /// `address` must be aligned to 4kb or this will return `Error::ARG`.
     /// `size` must be a multiple of 4kb or this will return `Error::ARG`.
-    pub fn mmio_map_ro<F>(&mut self, address: u64, size: u64, callback: F) -> Result<(), uc_error>
+    pub fn mmio_map_ro<F>(&mut self, address: u64, size: u64, callback: F) -> UcResult<()>
     where
         F: FnMut(&mut Unicorn<D, A>, u64, usize) -> u64 + 'a,
     {
@@ -517,7 +507,7 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
     ///
     /// `address` must be aligned to 4kb or this will return `Error::ARG`.
     /// `size` must be a multiple of 4kb or this will return `Error::ARG`.
-    pub fn mmio_map_wo<F>(&mut self, address: u64, size: u64, callback: F) -> Result<(), uc_error>
+    pub fn mmio_map_wo<F>(&mut self, address: u64, size: u64, callback: F) -> UcResult<()>
     where
         F: FnMut(&mut Unicorn<D, A>, u64, usize, u64) + 'a,
     {
@@ -533,10 +523,10 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
     ///
     /// `address` must be aligned to 4kb or this will return `Error::ARG`.
     /// `size` must be a multiple of 4kb or this will return `Error::ARG`.
-    pub fn mem_unmap(&mut self, address: u64, size: u64) -> Result<(), uc_error> {
+    pub fn mem_unmap(&mut self, address: u64, size: u64) -> UcResult<()> {
         let err = unsafe { uc_mem_unmap(self.get_handle(), address, size) };
         self.mmio_unmap(address, size);
-        err.into()
+        err.result()
     }
 
     fn mmio_unmap(&mut self, address: u64, size: u64) {
@@ -552,14 +542,14 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
     ///
     /// `address` must be aligned to 4kb or this will return `Error::ARG`.
     /// `size` must be a multiple of 4kb or this will return `Error::ARG`.
-    pub fn mem_protect(&mut self, address: u64, size: u64, perms: Prot) -> Result<(), uc_error> {
-        unsafe { uc_mem_protect(self.get_handle(), address, size, perms.0 as _) }.into()
+    pub fn mem_protect(&mut self, address: u64, size: u64, perms: Prot) -> UcResult<()> {
+        unsafe { uc_mem_protect(self.get_handle(), address, size, perms.0 as _) }.result()
     }
 
     /// Write an unsigned value to a register.
     pub fn reg_write(&mut self, regid: A::Reg, value: u64) {
         unsafe { uc_reg_write(self.get_handle(), regid.id(), (&raw const value).cast()) }
-            .and(Ok(()))
+            .result()
             .expect("write to a valid register should never fail");
     }
 
@@ -578,7 +568,7 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 count,
             )
         }
-        .and(Ok(()))
+        .result()
         .expect("write to a valid register should never fail");
     }
 
@@ -588,7 +578,7 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
     pub fn reg_read(&self, reg: A::Reg) -> u64 {
         let mut value = 0;
         unsafe { uc_reg_read(self.get_handle(), reg.id(), (&raw mut value).cast()) }
-            .and(Ok(value))
+            .result_with(value)
             .expect("read of a valid register should never fail")
     }
 
@@ -603,16 +593,14 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
             for i in 0..count {
                 addrs[i as usize] = &raw mut addrs[i as usize] as u64;
             }
-            let res = uc_reg_read_batch(
+            uc_reg_read_batch(
                 self.get_handle(),
                 regs.as_mut_ptr(),
                 addrs.as_mut_ptr().cast::<*mut c_void>(),
                 count,
-            );
-            match res {
-                uc_error::OK => addrs_vec,
-                _ => panic!("read of a valid register should never fail"),
-            }
+            )
+            .result_with(addrs_vec)
+            .expect("read of a valid register should never fail")
         }
     }
 
@@ -620,17 +608,12 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
     pub fn reg_read_i32(&self, reg: A::Reg) -> i32 {
         let mut value = 0;
         unsafe { uc_reg_read(self.get_handle(), reg.id(), (&raw mut value).cast()) }
-            .and(Ok(value))
+            .result_with(value)
             .expect("read of a valid register should never fail")
     }
 
     /// Add a code hook.
-    pub fn add_code_hook<F>(
-        &mut self,
-        begin: u64,
-        end: u64,
-        callback: F,
-    ) -> Result<UcHookId, uc_error>
+    pub fn add_code_hook<F>(&mut self, begin: u64, end: u64, callback: F) -> UcResult<UcHookId>
     where
         F: FnMut(&mut Unicorn<D, A>, u64, u32) + 'a,
     {
@@ -651,20 +634,15 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 end,
             )
         }
-        .and_then(|| {
-            let hook_id = UcHookId(hook_id);
-            self.inner_mut().hooks.push((hook_id, user_data));
-            Ok(hook_id)
-        })
+        .result()?;
+
+        let hook_id = UcHookId(hook_id);
+        self.inner_mut().hooks.push((hook_id, user_data));
+        Ok(hook_id)
     }
 
     /// Add a block hook.
-    pub fn add_block_hook<F>(
-        &mut self,
-        begin: u64,
-        end: u64,
-        callback: F,
-    ) -> Result<UcHookId, uc_error>
+    pub fn add_block_hook<F>(&mut self, begin: u64, end: u64, callback: F) -> UcResult<UcHookId>
     where
         F: FnMut(&mut Unicorn<D, A>, u64, u32) + 'a,
     {
@@ -685,11 +663,11 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 end,
             )
         }
-        .and_then(|| {
-            let hook_id = UcHookId(hook_id);
-            self.inner_mut().hooks.push((hook_id, user_data));
-            Ok(hook_id)
-        })
+        .result()?;
+
+        let hook_id = UcHookId(hook_id);
+        self.inner_mut().hooks.push((hook_id, user_data));
+        Ok(hook_id)
     }
 
     /// Add a memory hook.
@@ -699,12 +677,12 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
         begin: u64,
         end: u64,
         callback: F,
-    ) -> Result<UcHookId, uc_error>
+    ) -> UcResult<UcHookId>
     where
         F: FnMut(&mut Unicorn<D, A>, MemType, u64, usize, i64) -> bool + 'a,
     {
         if hook_type & (HookType::MEM_ALL | HookType::MEM_READ_AFTER) != hook_type {
-            return Err(uc_error::ARG);
+            return Err(UcError::InvalidArgument);
         }
 
         let mut hook_id = 0;
@@ -724,15 +702,15 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 end,
             )
         }
-        .and_then(|| {
-            let hook_id = UcHookId(hook_id);
-            self.inner_mut().hooks.push((hook_id, user_data));
-            Ok(hook_id)
-        })
+        .result()?;
+
+        let hook_id = UcHookId(hook_id);
+        self.inner_mut().hooks.push((hook_id, user_data));
+        Ok(hook_id)
     }
 
     /// Add an interrupt hook.
-    pub fn add_intr_hook<F>(&mut self, callback: F) -> Result<UcHookId, uc_error>
+    pub fn add_intr_hook<F>(&mut self, callback: F) -> UcResult<UcHookId>
     where
         F: FnMut(&mut Unicorn<D, A>, u32) + 'a,
     {
@@ -753,15 +731,15 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 0,
             )
         }
-        .and_then(|| {
-            let hook_id = UcHookId(hook_id);
-            self.inner_mut().hooks.push((hook_id, user_data));
-            Ok(hook_id)
-        })
+        .result()?;
+
+        let hook_id = UcHookId(hook_id);
+        self.inner_mut().hooks.push((hook_id, user_data));
+        Ok(hook_id)
     }
 
     /// Add hook for invalid instructions
-    pub fn add_insn_invalid_hook<F>(&mut self, callback: F) -> Result<UcHookId, uc_error>
+    pub fn add_insn_invalid_hook<F>(&mut self, callback: F) -> UcResult<UcHookId>
     where
         F: FnMut(&mut Unicorn<D, A>) -> bool + 'a,
     {
@@ -782,19 +760,14 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 0,
             )
         }
-        .and_then(|| {
-            let hook_id = UcHookId(hook_id);
-            self.inner_mut().hooks.push((hook_id, user_data));
-            Ok(hook_id)
-        })
+        .result()?;
+
+        let hook_id = UcHookId(hook_id);
+        self.inner_mut().hooks.push((hook_id, user_data));
+        Ok(hook_id)
     }
 
-    pub fn add_tlb_hook<F>(
-        &mut self,
-        begin: u64,
-        end: u64,
-        callback: F,
-    ) -> Result<UcHookId, uc_error>
+    pub fn add_tlb_hook<F>(&mut self, begin: u64, end: u64, callback: F) -> UcResult<UcHookId>
     where
         F: FnMut(&mut Unicorn<D, A>, u64, MemType) -> Option<TlbEntry> + 'a,
     {
@@ -815,11 +788,11 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 end,
             )
         }
-        .and_then(|| {
-            let hook_id = UcHookId(hook_id);
-            self.inner_mut().hooks.push((hook_id, user_data));
-            Ok(hook_id)
-        })
+        .result()?;
+
+        let hook_id = UcHookId(hook_id);
+        self.inner_mut().hooks.push((hook_id, user_data));
+        Ok(hook_id)
     }
 
     pub fn add_tcg_hook<F>(
@@ -829,7 +802,7 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
         begin: u64,
         end: u64,
         callback: F,
-    ) -> Result<UcHookId, uc_error>
+    ) -> UcResult<UcHookId>
     where
         F: FnMut(&mut Unicorn<D, A>, u64, u64, u64, usize) + 'a,
     {
@@ -851,23 +824,18 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 code as i32,
                 flag.0 as i32,
             )
-            .and_then(|| {
-                let hook_id = UcHookId(hook_id);
-                self.inner_mut().hooks.push((hook_id, user_data));
-                Ok(hook_id)
-            })
+            .result()?;
+
+            let hook_id = UcHookId(hook_id);
+            self.inner_mut().hooks.push((hook_id, user_data));
+            Ok(hook_id)
         }
     }
 
     /// Add hook for edge generated event.
     ///
     /// Callback parameters: (uc, `cur_tb`, `prev_tb`)
-    pub fn add_edge_gen_hook<F>(
-        &mut self,
-        begin: u64,
-        end: u64,
-        callback: F,
-    ) -> Result<UcHookId, uc_error>
+    pub fn add_edge_gen_hook<F>(&mut self, begin: u64, end: u64, callback: F) -> UcResult<UcHookId>
     where
         F: FnMut(&mut Unicorn<D, A>, &mut TranslationBlock, &mut TranslationBlock) + 'a,
     {
@@ -888,38 +856,40 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 end,
             )
         }
-        .and_then(|| {
-            let hook_id = UcHookId(hook_id);
-            self.inner_mut().hooks.push((hook_id, user_data));
-            Ok(hook_id)
-        })
+        .result()?;
+
+        let hook_id = UcHookId(hook_id);
+        self.inner_mut().hooks.push((hook_id, user_data));
+        Ok(hook_id)
     }
 
     /// Remove a hook.
     ///
     /// `hook_id` is the value returned by `add_*_hook` functions.
-    pub fn remove_hook(&mut self, hook_id: UcHookId) -> Result<(), uc_error> {
+    pub fn remove_hook(&mut self, hook_id: UcHookId) -> UcResult<()> {
         // drop the hook
         let inner = self.inner_mut();
         inner.hooks.retain(|(id, _)| id != &hook_id);
 
-        unsafe { uc_hook_del(inner.handle, hook_id.0) }.into()
+        unsafe { uc_hook_del(inner.handle, hook_id.0) }.result()
     }
 
     /// Allocate and return an empty Unicorn context.
     ///
     /// To be populated via `context_save`.
-    pub fn context_alloc(&self) -> Result<Context<A>, uc_error> {
+    pub fn context_alloc(&self) -> UcResult<Context<A>> {
         let mut empty_context = ptr::null_mut();
-        unsafe { uc_context_alloc(self.get_handle(), &raw mut empty_context) }.and(Ok(Context {
-            context: empty_context,
-            arch: PhantomData,
-        }))
+        unsafe { uc_context_alloc(self.get_handle(), &raw mut empty_context) }.result_with(
+            Context {
+                context: empty_context,
+                arch: PhantomData,
+            },
+        )
     }
 
     /// Save current Unicorn context to previously allocated Context struct.
-    pub fn context_save(&self, context: &mut Context<A>) -> Result<(), uc_error> {
-        unsafe { uc_context_save(self.get_handle(), context.context) }.into()
+    pub fn context_save(&self, context: &mut Context<A>) -> UcResult<()> {
+        unsafe { uc_context_save(self.get_handle(), context.context) }.result()
     }
 
     /// Allocate and return a Context struct initialized with the current CPU context.
@@ -927,19 +897,21 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
     /// This can be used for fast rollbacks with `context_restore`.
     /// In case of many non-concurrent context saves, use `context_alloc` and *_save
     /// individually to avoid unnecessary allocations.
-    pub fn context_init(&self) -> Result<Context<A>, uc_error> {
+    pub fn context_init(&self) -> UcResult<Context<A>> {
         let mut new_context = ptr::null_mut();
         unsafe {
-            uc_context_alloc(self.get_handle(), &raw mut new_context).and_then(|| {
-                uc_context_save(self.get_handle(), new_context)
-                    .and(Ok(Context {
-                        context: new_context,
-                        arch: PhantomData,
-                    }))
-                    .inspect_err(|_| {
-                        uc_context_free(new_context);
-                    })
-            })
+            uc_context_alloc(self.get_handle(), &raw mut new_context)
+                .result()
+                .and_then(|()| {
+                    uc_context_save(self.get_handle(), new_context)
+                        .result_with(Context {
+                            context: new_context,
+                            arch: PhantomData,
+                        })
+                        .inspect_err(|_| {
+                            uc_context_free(new_context);
+                        })
+                })
         }
     }
 
@@ -948,8 +920,8 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
     /// Perform a quick rollback of the CPU context, including registers and some
     /// internal metadata. Contexts may not be shared across engine instances with
     /// differing arches or modes. Memory has to be restored manually, if needed.
-    pub fn context_restore(&self, context: &Context<A>) -> Result<(), uc_error> {
-        unsafe { uc_context_restore(self.get_handle(), context.context) }.into()
+    pub fn context_restore(&self, context: &Context<A>) -> UcResult<()> {
+        unsafe { uc_context_restore(self.get_handle(), context.context) }.result()
     }
 
     /// Emulate machine code for a specified duration.
@@ -964,42 +936,42 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
         until: u64,
         timeout: u64,
         count: usize,
-    ) -> Result<(), uc_error> {
-        unsafe { uc_emu_start(self.get_handle(), begin, until, timeout, count as _) }.into()
+    ) -> UcResult<()> {
+        unsafe { uc_emu_start(self.get_handle(), begin, until, timeout, count as _) }.result()
     }
 
     /// Stop the emulation.
     ///
     /// This is usually called from callback function in hooks.
     /// NOTE: For now, this will stop the execution only after the current block.
-    pub fn emu_stop(&mut self) -> Result<(), uc_error> {
-        unsafe { uc_emu_stop(self.get_handle()).into() }
+    pub fn emu_stop(&mut self) -> UcResult<()> {
+        unsafe { uc_emu_stop(self.get_handle()).result() }
     }
 
     /// Query the internal status of the engine.
     ///
     /// supported: `MODE`, `PAGE_SIZE`, `ARCH`
-    pub fn query(&self, query: Query) -> Result<usize, uc_error> {
+    pub fn query(&self, query: Query) -> UcResult<usize> {
         let mut result = 0;
-        unsafe { uc_query(self.get_handle(), query, &raw mut result) }.and(Ok(result))
+        unsafe { uc_query(self.get_handle(), query, &raw mut result) }.result_with(result)
     }
 
     /// Gets the current program counter for this `unicorn` instance.
-    pub fn pc_read(&self) -> Result<u64, uc_error> {
+    pub fn pc_read(&self) -> UcResult<u64> {
         let mode = self.ctl_get_mode()?;
 
         Ok(self.reg_read(A::Reg::pc(mode)?))
     }
 
     /// Sets the program counter for this `unicorn` instance.
-    pub fn set_pc(&mut self, value: u64) -> Result<(), uc_error> {
+    pub fn set_pc(&mut self, value: u64) -> UcResult<()> {
         let mode = self.ctl_get_mode()?;
 
         self.reg_write(A::Reg::pc(mode)?, value);
         Ok(())
     }
 
-    pub fn ctl_get_mode(&self) -> Result<Mode, uc_error> {
+    pub fn ctl_get_mode(&self) -> UcResult<Mode> {
         let mut result = 0;
         unsafe {
             uc_ctl(
@@ -1008,10 +980,11 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 &mut result,
             )
         }
-        .and_then(|| Ok(Mode::try_from(result)))?
+        .result()?;
+        Mode::try_from(result).result()
     }
 
-    pub fn ctl_get_page_size(&self) -> Result<u32, uc_error> {
+    pub fn ctl_get_page_size(&self) -> UcResult<u32> {
         let mut result = 0;
         unsafe {
             uc_ctl(
@@ -1020,10 +993,10 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 &mut result,
             )
         }
-        .and_then(|| Ok(result))
+        .result_with(result)
     }
 
-    pub fn ctl_set_page_size(&mut self, page_size: u32) -> Result<(), uc_error> {
+    pub fn ctl_set_page_size(&mut self, page_size: u32) -> UcResult<()> {
         unsafe {
             uc_ctl(
                 self.get_handle(),
@@ -1031,10 +1004,10 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 page_size,
             )
         }
-        .into()
+        .result()
     }
 
-    pub fn ctl_get_arch(&self) -> Result<Arch, uc_error> {
+    pub fn ctl_get_arch(&self) -> UcResult<Arch> {
         let mut result = 0;
         unsafe {
             uc_ctl(
@@ -1043,10 +1016,11 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 &mut result,
             )
         }
-        .and_then(|| Arch::try_from(result as usize))
+        .result()?;
+        Arch::try_from(result as usize).result()
     }
 
-    pub fn ctl_get_timeout(&self) -> Result<u64, uc_error> {
+    pub fn ctl_get_timeout(&self) -> UcResult<u64> {
         let mut result = 0;
         unsafe {
             uc_ctl(
@@ -1055,10 +1029,10 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 &mut result,
             )
         }
-        .and(Ok(result))
+        .result_with(result)
     }
 
-    pub fn ctl_exits_enable(&mut self) -> Result<(), uc_error> {
+    pub fn ctl_exits_enable(&mut self) -> UcResult<()> {
         unsafe {
             uc_ctl(
                 self.get_handle(),
@@ -1066,10 +1040,10 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 1,
             )
         }
-        .into()
+        .result()
     }
 
-    pub fn ctl_exits_disable(&mut self) -> Result<(), uc_error> {
+    pub fn ctl_exits_disable(&mut self) -> UcResult<()> {
         unsafe {
             uc_ctl(
                 self.get_handle(),
@@ -1077,10 +1051,10 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 0,
             )
         }
-        .into()
+        .result()
     }
 
-    pub fn ctl_get_exits_count(&self) -> Result<usize, uc_error> {
+    pub fn ctl_get_exits_count(&self) -> UcResult<usize> {
         let mut result = 0;
         unsafe {
             uc_ctl(
@@ -1089,10 +1063,10 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 &mut result,
             )
         }
-        .and(Ok(result))
+        .result_with(result)
     }
 
-    pub fn ctl_get_exits(&self) -> Result<Vec<u64>, uc_error> {
+    pub fn ctl_get_exits(&self) -> UcResult<Vec<u64>> {
         let exits_count = self.ctl_get_exits_count()?;
         let mut exits = Vec::with_capacity(exits_count);
         unsafe {
@@ -1103,13 +1077,15 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 exits_count,
             )
         }
-        .and_then(|| unsafe {
+        .result()?;
+
+        unsafe {
             exits.set_len(exits_count);
             Ok(exits)
-        })
+        }
     }
 
-    pub fn ctl_get_invalid_addr(&self) -> Result<u64, uc_error> {
+    pub fn ctl_get_invalid_addr(&self) -> UcResult<u64> {
         let mut addr: u64 = 0;
         unsafe {
             uc_ctl(
@@ -1118,10 +1094,10 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 &mut addr,
             )
         }
-        .and(Ok(addr))
+        .result_with(addr)
     }
 
-    pub fn ctl_set_exits(&mut self, exits: &[u64]) -> Result<(), uc_error> {
+    pub fn ctl_set_exits(&mut self, exits: &[u64]) -> UcResult<()> {
         unsafe {
             uc_ctl(
                 self.get_handle(),
@@ -1130,10 +1106,10 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 exits.len(),
             )
         }
-        .into()
+        .result()
     }
 
-    pub fn ctl_get_cpu_model(&self) -> Result<i32, uc_error> {
+    pub fn ctl_get_cpu_model(&self) -> UcResult<i32> {
         let mut result = 0;
         unsafe {
             uc_ctl(
@@ -1142,10 +1118,10 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 &mut result,
             )
         }
-        .and(Ok(result))
+        .result_with(result)
     }
 
-    pub fn ctl_set_cpu_model(&mut self, cpu_model: i32) -> Result<(), uc_error> {
+    pub fn ctl_set_cpu_model(&mut self, cpu_model: i32) -> UcResult<()> {
         unsafe {
             uc_ctl(
                 self.get_handle(),
@@ -1153,10 +1129,10 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 cpu_model,
             )
         }
-        .into()
+        .result()
     }
 
-    pub fn ctl_remove_cache(&mut self, address: u64, end: u64) -> Result<(), uc_error> {
+    pub fn ctl_remove_cache(&mut self, address: u64, end: u64) -> UcResult<()> {
         unsafe {
             uc_ctl(
                 self.get_handle(),
@@ -1165,14 +1141,14 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 end,
             )
         }
-        .into()
+        .result()
     }
 
     pub fn ctl_request_cache(
         &self,
         address: u64,
         tb: Option<&mut TranslationBlock>,
-    ) -> Result<(), uc_error> {
+    ) -> UcResult<()> {
         let tb_ptr = tb.map_or(ptr::null_mut(), core::ptr::from_mut);
         unsafe {
             uc_ctl(
@@ -1182,18 +1158,18 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 tb_ptr,
             )
         }
-        .into()
+        .result()
     }
 
-    pub fn ctl_flush_tb(&mut self) -> Result<(), uc_error> {
-        unsafe { uc_ctl(self.get_handle(), UC_CTL_WRITE!(ControlType::TB_FLUSH)) }.into()
+    pub fn ctl_flush_tb(&mut self) -> UcResult<()> {
+        unsafe { uc_ctl(self.get_handle(), UC_CTL_WRITE!(ControlType::TB_FLUSH)) }.result()
     }
 
-    pub fn ctl_flush_tlb(&mut self) -> Result<(), uc_error> {
-        unsafe { uc_ctl(self.get_handle(), UC_CTL_WRITE!(ControlType::TLB_FLUSH)) }.into()
+    pub fn ctl_flush_tlb(&mut self) -> UcResult<()> {
+        unsafe { uc_ctl(self.get_handle(), UC_CTL_WRITE!(ControlType::TLB_FLUSH)) }.result()
     }
 
-    pub fn ctl_set_context_mode(&mut self, mode: ContextMode) -> Result<(), uc_error> {
+    pub fn ctl_set_context_mode(&mut self, mode: ContextMode) -> UcResult<()> {
         unsafe {
             uc_ctl(
                 self.get_handle(),
@@ -1201,10 +1177,10 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 mode,
             )
         }
-        .into()
+        .result()
     }
 
-    pub fn ctl_set_tlb_type(&mut self, t: TlbType) -> Result<(), uc_error> {
+    pub fn ctl_set_tlb_type(&mut self, t: TlbType) -> UcResult<()> {
         unsafe {
             uc_ctl(
                 self.get_handle(),
@@ -1212,6 +1188,6 @@ impl<'a, D, A: UcArch> Unicorn<'a, D, A> {
                 t as i32,
             )
         }
-        .into()
+        .result()
     }
 }

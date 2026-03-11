@@ -1,6 +1,6 @@
-use unicorn_engine_sys::{Mode, RegisterRISCV, uc_error};
+use unicorn_engine_sys::{Mode, RegisterRISCV};
 
-use crate::arch::{Register, UcArch};
+use crate::arch::{Register, UcArch, UcResult};
 
 pub enum RiscV {}
 

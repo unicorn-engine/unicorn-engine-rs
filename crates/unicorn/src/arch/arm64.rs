@@ -2,12 +2,12 @@ pub mod long_register;
 
 use alloc::{boxed::Box, rc::Rc};
 use unicorn_engine_sys::{
-    Arm64Insn, HookType, Mode, RegisterARM64, RegisterARM64CP, uc_error, uc_hook_add, uc_reg_read,
+    Arm64Insn, HookType, Mode, RegisterARM64, RegisterARM64CP, uc_hook_add, uc_reg_read,
     uc_reg_write,
 };
 
 use crate::{
-    UcHookId, Unicorn,
+    RawUcErrorExt, UcHookId, UcResult, Unicorn,
     arch::{Register, UcArch},
     hook,
 };
@@ -21,7 +21,7 @@ impl_reg_pc_counter!(RegisterARM64);
 // if they are infallible, Result is not needed
 impl<'a, D> Unicorn<'a, D, Arm64> {
     /// Read ARM64 Coprocessor register
-    pub fn reg_read_arm64_coproc(&self, reg: &mut RegisterARM64CP) -> Result<(), uc_error> {
+    pub fn reg_read_arm64_coproc(&self, reg: &mut RegisterARM64CP) -> UcResult<()> {
         unsafe {
             uc_reg_read(
                 self.get_handle(),
@@ -29,11 +29,11 @@ impl<'a, D> Unicorn<'a, D, Arm64> {
                 core::ptr::from_mut(reg).cast(),
             )
         }
-        .and(Ok(()))
+        .result()
     }
 
     /// Write ARM64 Coprocessor register
-    pub fn reg_write_arm64_coproc(&mut self, reg: &RegisterARM64CP) -> Result<(), uc_error> {
+    pub fn reg_write_arm64_coproc(&mut self, reg: &RegisterARM64CP) -> UcResult<()> {
         unsafe {
             uc_reg_write(
                 self.get_handle(),
@@ -41,7 +41,7 @@ impl<'a, D> Unicorn<'a, D, Arm64> {
                 core::ptr::from_ref(reg).cast(),
             )
         }
-        .and(Ok(()))
+        .result()
     }
 
     /// Add hook for ARM MRS/MSR/SYS/SYSL instructions.
@@ -54,7 +54,7 @@ impl<'a, D> Unicorn<'a, D, Arm64> {
         begin: u64,
         end: u64,
         callback: F,
-    ) -> Result<UcHookId, uc_error>
+    ) -> UcResult<UcHookId>
     where
         F: FnMut(&mut Unicorn<D, Arm64>, RegisterARM64, &RegisterARM64CP) -> bool + 'a,
     {
@@ -76,10 +76,9 @@ impl<'a, D> Unicorn<'a, D, Arm64> {
                 insn_type,
             )
         }
-        .and_then(|| {
-            let hook_id = UcHookId(hook_id);
-            self.inner_mut().hooks.push((hook_id, user_data));
-            Ok(hook_id)
-        })
+        .result()?;
+        let hook_id = UcHookId(hook_id);
+        self.inner_mut().hooks.push((hook_id, user_data));
+        Ok(hook_id)
     }
 }

@@ -1,6 +1,6 @@
-use unicorn_engine_sys::{Mode, RegisterM68K, uc_error};
+use unicorn_engine_sys::{Mode, RegisterM68K};
 
-use crate::arch::{Register, UcArch};
+use crate::arch::{Register, UcArch, UcResult};
 
 pub enum M68K {}
 

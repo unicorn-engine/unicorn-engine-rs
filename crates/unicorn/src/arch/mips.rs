@@ -1,6 +1,6 @@
-use unicorn_engine_sys::{Mode, RegisterMIPS, uc_error};
+use unicorn_engine_sys::{Mode, RegisterMIPS};
 
-use crate::arch::{Register, UcArch};
+use crate::arch::{Register, UcArch, UcResult};
 
 pub enum Mips {}
 

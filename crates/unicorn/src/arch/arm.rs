@@ -1,8 +1,8 @@
-use unicorn_engine_sys::{Mode, RegisterARM, RegisterARMCP, uc_error, uc_reg_read, uc_reg_write};
+use unicorn_engine_sys::{Mode, RegisterARM, RegisterARMCP, uc_reg_read, uc_reg_write};
 
 use crate::{
-    Unicorn,
-    arch::{Register, UcArch},
+    RawUcErrorExt, Unicorn,
+    arch::{Register, UcArch, UcResult},
 };
 
 pub enum Arm {}
@@ -14,7 +14,7 @@ impl_reg_pc_counter!(RegisterARM);
 // if they are infallible, Result is not needed
 impl<D> Unicorn<'_, D, Arm> {
     /// Read ARM Coprocessor register
-    pub fn reg_read_arm_coproc(&self, reg: &mut RegisterARMCP) -> Result<(), uc_error> {
+    pub fn reg_read_arm_coproc(&self, reg: &mut RegisterARMCP) -> UcResult<()> {
         unsafe {
             uc_reg_read(
                 self.get_handle(),
@@ -22,11 +22,11 @@ impl<D> Unicorn<'_, D, Arm> {
                 core::ptr::from_mut(reg).cast(),
             )
         }
-        .into()
+        .result()
     }
 
     /// Write ARM Coprocessor register
-    pub fn reg_write_arm_coproc(&mut self, reg: &RegisterARMCP) -> Result<(), uc_error> {
+    pub fn reg_write_arm_coproc(&mut self, reg: &RegisterARMCP) -> UcResult<()> {
         unsafe {
             uc_reg_write(
                 self.get_handle(),
@@ -34,6 +34,6 @@ impl<D> Unicorn<'_, D, Arm> {
                 core::ptr::from_ref(reg).cast(),
             )
         }
-        .into()
+        .result()
     }
 }

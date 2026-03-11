@@ -15,6 +15,7 @@ description.workspace = true
 workspace = true
 
 [dependencies]
+thiserror = "2.0.18"
 unicorn-engine-sys = { workspace = true, features = [], default-features = false }
 
 [build-dependencies]

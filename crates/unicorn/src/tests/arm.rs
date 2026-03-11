@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    ArmCpuModel, RegisterARM, RegisterARMCP, TcgOpCode, TcgOpFlag, arch::arm::Arm, uc_error,
+    ArmCpuModel, RegisterARM, RegisterARMCP, TcgOpCode, TcgOpFlag, UcError, arch::arm::Arm,
 };
 
 #[test]
@@ -438,7 +438,7 @@ fn test_arm_not_allow_privilege_escalation() {
     let err = uc
         .emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap_err();
-    assert_eq!(err, uc_error::EXCEPTION);
+    assert_eq!(err, UcError::CpuException);
 
     let sp = uc.reg_read(RegisterARM::SP) as u32;
     let lr = uc.reg_read(RegisterARM::LR) as u32;
@@ -490,7 +490,7 @@ fn test_arm_hflags_rebuilt() {
     let err = uc
         .emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap_err();
-    assert_eq!(err, uc_error::EXCEPTION);
+    assert_eq!(err, UcError::CpuException);
 
     let cpsr = 0x60000013;
     uc.reg_write(RegisterARM::CPSR, cpsr as u64);
@@ -537,7 +537,7 @@ fn test_arm_mem_access_abort() {
     .unwrap();
 
     let err = uc.emu_start(CODE_START, CODE_START + 4, 0, 0).unwrap_err();
-    assert_eq!(err, uc_error::READ_UNMAPPED);
+    assert_eq!(err, UcError::ReadUnmapped);
 
     let pc = uc.reg_read(RegisterARM::PC);
     assert_eq!(pc, *uc.get_data());
@@ -545,13 +545,13 @@ fn test_arm_mem_access_abort() {
     let err = uc
         .emu_start(CODE_START + 4, CODE_START + 8, 0, 0)
         .unwrap_err();
-    assert_eq!(err, uc_error::INSN_INVALID);
+    assert_eq!(err, UcError::InvalidInstruction);
 
     let pc = uc.reg_read(RegisterARM::PC);
     assert_eq!(pc, *uc.get_data());
 
     let err = uc.emu_start(0x900000, 0x900000 + 8, 0, 0).unwrap_err();
-    assert_eq!(err, uc_error::FETCH_UNMAPPED);
+    assert_eq!(err, UcError::FetchUnmapped);
 
     let pc = uc.reg_read(RegisterARM::PC);
     assert_eq!(pc, *uc.get_data());

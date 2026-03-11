@@ -1,10 +1,10 @@
 pub mod long_register;
 
 use alloc::{boxed::Box, rc::Rc};
-use unicorn_engine_sys::{HookType, Mode, RegisterX86, X86Insn, uc_error, uc_hook_add};
+use unicorn_engine_sys::{HookType, Mode, RegisterX86, X86Insn, uc_hook_add};
 
 use crate::{
-    UcHookId, Unicorn,
+    RawUcErrorExt, UcError, UcHookId, UcResult, Unicorn,
     arch::{Register, UcArch},
     hook,
 };
@@ -18,12 +18,12 @@ impl Register for RegisterX86 {
         self as i32
     }
 
-    fn pc(mode: Mode) -> Result<Self, uc_error> {
+    fn pc(mode: Mode) -> UcResult<Self> {
         match mode {
             Mode::MODE_16 => Ok(RegisterX86::IP as _),
             Mode::MODE_32 => Ok(RegisterX86::EIP as _),
             Mode::MODE_64 => Ok(RegisterX86::RIP as _),
-            _ => Err(uc_error::ARCH),
+            _ => Err(UcError::UnsupportedArchitecture),
         }
     }
 }
@@ -36,7 +36,7 @@ impl<'a, D> Unicorn<'a, D, X86> {
         begin: u64,
         end: u64,
         callback: F,
-    ) -> Result<UcHookId, uc_error>
+    ) -> UcResult<UcHookId>
     where
         F: FnMut(&mut Unicorn<D, X86>) + 'a,
     {
@@ -58,15 +58,14 @@ impl<'a, D> Unicorn<'a, D, X86> {
                 insn_type,
             )
         }
-        .and_then(|| {
-            let hook_id = UcHookId(hook_id);
-            self.inner_mut().hooks.push((hook_id, user_data));
-            Ok(hook_id)
-        })
+        .result()?;
+        let hook_id = UcHookId(hook_id);
+        self.inner_mut().hooks.push((hook_id, user_data));
+        Ok(hook_id)
     }
 
     /// Add hook for x86 IN instruction.
-    pub fn add_insn_in_hook<F>(&mut self, callback: F) -> Result<UcHookId, uc_error>
+    pub fn add_insn_in_hook<F>(&mut self, callback: F) -> UcResult<UcHookId>
     where
         F: FnMut(&mut Unicorn<D, X86>, u32, usize) -> u32 + 'a,
     {
@@ -88,15 +87,14 @@ impl<'a, D> Unicorn<'a, D, X86> {
                 X86Insn::IN,
             )
         }
-        .and_then(|| {
-            let hook_id = UcHookId(hook_id);
-            self.inner_mut().hooks.push((hook_id, user_data));
-            Ok(hook_id)
-        })
+        .result()?;
+        let hook_id = UcHookId(hook_id);
+        self.inner_mut().hooks.push((hook_id, user_data));
+        Ok(hook_id)
     }
 
     /// Add hook for x86 OUT instruction.
-    pub fn add_insn_out_hook<F>(&mut self, callback: F) -> Result<UcHookId, uc_error>
+    pub fn add_insn_out_hook<F>(&mut self, callback: F) -> UcResult<UcHookId>
     where
         F: FnMut(&mut Unicorn<D, X86>, u32, usize, u32) + 'a,
     {
@@ -118,10 +116,9 @@ impl<'a, D> Unicorn<'a, D, X86> {
                 X86Insn::OUT,
             )
         }
-        .and_then(|| {
-            let hook_id = UcHookId(hook_id);
-            self.inner_mut().hooks.push((hook_id, user_data));
-            Ok(hook_id)
-        })
+        .result()?;
+        let hook_id = UcHookId(hook_id);
+        self.inner_mut().hooks.push((hook_id, user_data));
+        Ok(hook_id)
     }
 }

@@ -17,7 +17,7 @@ mod riscv;
 #[cfg(feature = "arch_s390x")]
 mod s390x;
 
-use crate::{HookType, Mode, Prot, TlbEntry, TlbType, UcArch, Unicorn, uc_error};
+use crate::{HookType, Mode, Prot, TlbEntry, TlbType, UcArch, Unicorn};
 
 pub const CODE_START: u64 = 0x1000;
 pub const CODE_LEN: u64 = 0x4000;

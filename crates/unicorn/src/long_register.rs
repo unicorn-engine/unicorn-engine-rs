@@ -1,6 +1,6 @@
 use unicorn_engine_sys::{uc_reg_read, uc_reg_write};
 
-use crate::{Register, UcArch, Unicorn};
+use crate::{RawUcErrorExt, Register, UcArch, Unicorn};
 
 // generic_const_exprs are unstable, so we have to be generic over a constant here and not use an associated constant
 pub trait LongRegister<const SIZE: usize>: Copy {
@@ -19,7 +19,7 @@ impl<D, A: UcArch> Unicorn<'_, D, A> {
 
         let mut value = [0; N];
         unsafe { uc_reg_read(self.get_handle(), curr_reg_id, value.as_mut_ptr().cast()) }
-            .and(Ok(()))
+            .result()
             .expect("read of a valid register should never fail");
         value
     }
@@ -33,7 +33,7 @@ impl<D, A: UcArch> Unicorn<'_, D, A> {
         value: [u8; N],
     ) {
         unsafe { uc_reg_write(self.get_handle(), long.reg().id(), value.as_ptr().cast()) }
-            .and(Ok(()))
+            .result()
             .expect("write to a valid register should never fail");
     }
 }

@@ -341,6 +341,7 @@ fn generate_bindings() {
         .bitfield_enum(bitflag_enums.join("|"))
         .derive_ord(true)
         .derive_eq(true)
+        .must_use_type("uc_err")
         .use_core()
         .generate()
         .expect("Failed to generate bindings");

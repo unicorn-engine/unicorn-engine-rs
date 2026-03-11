@@ -1,6 +1,6 @@
 use unicorn_engine_sys::{Arm64CpuModel, Arm64Insn, RegisterARM64, RegisterARM64CP};
 
-use crate::arch::arm64::Arm64;
+use crate::{UcError, arch::arm64::Arm64};
 
 use super::*;
 
@@ -174,7 +174,7 @@ fn test_arm64_correct_address_in_small_jump_hook() {
     let err = uc
         .emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap_err();
-    assert_eq!(err, uc_error::FETCH_UNMAPPED);
+    assert_eq!(err, UcError::FetchUnmapped);
 
     let x0 = uc.reg_read(RegisterARM64::X0);
     let pc = uc.reg_read(RegisterARM64::PC);
@@ -200,7 +200,7 @@ fn test_arm64_correct_address_in_long_jump_hook() {
     let err = uc
         .emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap_err();
-    assert_eq!(err, uc_error::FETCH_UNMAPPED);
+    assert_eq!(err, UcError::FetchUnmapped);
 
     let x0 = uc.reg_read(RegisterARM64::X0);
     let pc = uc.reg_read(RegisterARM64::PC);
@@ -263,7 +263,7 @@ fn test_arm64_block_invalid_mem_read_write_sync() {
     let err = uc
         .emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap_err();
-    assert_eq!(err, uc_error::READ_UNMAPPED);
+    assert_eq!(err, UcError::ReadUnmapped);
 
     let x0 = uc.reg_read(RegisterARM64::X0);
     let x1 = uc.reg_read(RegisterARM64::X1);
