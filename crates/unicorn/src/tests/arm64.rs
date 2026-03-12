@@ -1,5 +1,7 @@
 use unicorn_engine_sys::{Arm64CpuModel, Arm64Insn, RegisterARM64, RegisterARM64CP};
 
+use crate::{UcError, arch::arm64::Arm64};
+
 use super::*;
 
 #[test]
@@ -10,29 +12,23 @@ fn test_arm64_until() {
         0x9c, 0x23, 0x00, 0x91, // add x28, x28, 8
     ];
 
-    let mut uc = uc_common_setup(
-        Arch::ARM64,
-        Mode::ARM,
-        Some(Arm64CpuModel::A72 as i32),
-        code,
-        (),
-    );
+    let mut uc = uc_common_setup::<_, Arm64>(Mode::ARM, Some(Arm64CpuModel::A72 as i32), code, ());
 
     let x16 = 0x12341234;
     let x17 = 0x78907890;
     let x28 = 0x12341234;
 
-    uc.reg_write(RegisterARM64::X16, x16).unwrap();
-    uc.reg_write(RegisterARM64::X17, x17).unwrap();
-    uc.reg_write(RegisterARM64::X28, x28).unwrap();
+    uc.reg_write(RegisterARM64::X16, x16);
+    uc.reg_write(RegisterARM64::X17, x17);
+    uc.reg_write(RegisterARM64::X28, x28);
 
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 3)
         .unwrap();
 
-    let x16 = uc.reg_read(RegisterARM64::X16).unwrap();
-    let x17 = uc.reg_read(RegisterARM64::X17).unwrap();
-    let x28 = uc.reg_read(RegisterARM64::X28).unwrap();
-    let pc = uc.reg_read(RegisterARM64::PC).unwrap();
+    let x16 = uc.reg_read(RegisterARM64::X16);
+    let x17 = uc.reg_read(RegisterARM64::X17);
+    let x28 = uc.reg_read(RegisterARM64::X28);
+    let pc = uc.reg_read(RegisterARM64::PC);
 
     assert_eq!(x16, 0x1);
     assert_eq!(x17, 0x20);
@@ -43,33 +39,27 @@ fn test_arm64_until() {
 #[test]
 fn test_arm64_code_patching() {
     let code = &[0x00, 0x04, 0x00, 0x11]; // add w0, w0, 0x1
-    let mut uc = uc_common_setup(
-        Arch::ARM64,
-        Mode::ARM,
-        Some(Arm64CpuModel::A72 as i32),
-        code,
-        (),
-    );
+    let mut uc = uc_common_setup::<_, Arm64>(Mode::ARM, Some(Arm64CpuModel::A72 as i32), code, ());
 
     let x0 = 0x0;
-    uc.reg_write(RegisterARM64::X0, x0).unwrap();
+    uc.reg_write(RegisterARM64::X0, x0);
 
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let x0 = uc.reg_read(RegisterARM64::X0).unwrap();
+    let x0 = uc.reg_read(RegisterARM64::X0);
     assert_eq!(x0, 0x1);
 
     let patch_code = &[0x00, 0xfc, 0x1f, 0x11]; // add w0, w0, 0x7FF
     uc.mem_write(CODE_START, patch_code).unwrap();
 
     let x0 = 0x0;
-    uc.reg_write(RegisterARM64::X0, x0).unwrap();
+    uc.reg_write(RegisterARM64::X0, x0);
 
     uc.emu_start(CODE_START, CODE_START + patch_code.len() as u64, 0, 0)
         .unwrap();
 
-    let x0 = uc.reg_read(RegisterARM64::X0).unwrap();
+    let x0 = uc.reg_read(RegisterARM64::X0);
     assert_ne!(x0, 0x1);
     assert_eq!(x0, 0x7ff);
 }
@@ -78,21 +68,15 @@ fn test_arm64_code_patching() {
 #[test]
 fn test_arm64_code_patching_count() {
     let code = &[0x00, 0x04, 0x00, 0x11]; // add w0, w0, 0x1
-    let mut uc = uc_common_setup(
-        Arch::ARM64,
-        Mode::ARM,
-        Some(Arm64CpuModel::A72 as i32),
-        code,
-        (),
-    );
+    let mut uc = uc_common_setup::<_, Arm64>(Mode::ARM, Some(Arm64CpuModel::A72 as i32), code, ());
 
     let x0 = 0x0;
-    uc.reg_write(RegisterARM64::X0, x0).unwrap();
+    uc.reg_write(RegisterARM64::X0, x0);
 
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 1)
         .unwrap();
 
-    let x0 = uc.reg_read(RegisterARM64::X0).unwrap();
+    let x0 = uc.reg_read(RegisterARM64::X0);
     assert_eq!(x0, 0x1);
 
     let patch_code = &[0x00, 0xfc, 0x1f, 0x11]; // add w0, w0, 0x7FF
@@ -101,12 +85,12 @@ fn test_arm64_code_patching_count() {
         .unwrap();
 
     let x0 = 0x0;
-    uc.reg_write(RegisterARM64::X0, x0).unwrap();
+    uc.reg_write(RegisterARM64::X0, x0);
 
     uc.emu_start(CODE_START, CODE_START + patch_code.len() as u64, 0, 1)
         .unwrap();
 
-    let x0 = uc.reg_read(RegisterARM64::X0).unwrap();
+    let x0 = uc.reg_read(RegisterARM64::X0);
     assert_ne!(x0, 0x1);
     assert_eq!(x0, 0x7ff);
 }
@@ -114,22 +98,16 @@ fn test_arm64_code_patching_count() {
 #[test]
 fn test_arm64_v8_pac() {
     let code = &[0x28, 0xfd, 0xea, 0xc8]; // casal x10, x8, [x9]
-    let mut uc = uc_common_setup(
-        Arch::ARM64,
-        Mode::ARM,
-        Some(Arm64CpuModel::MAX as i32),
-        code,
-        (),
-    );
+    let mut uc = uc_common_setup::<_, Arm64>(Mode::ARM, Some(Arm64CpuModel::MAX as i32), code, ());
 
     uc.mem_map(0x40000, 0x1000, Prot::ALL).unwrap();
     uc.mem_write(0x40000, &[0; 8]).unwrap();
 
     let x9 = 0x40000;
-    uc.reg_write(RegisterARM64::X9, x9).unwrap();
+    uc.reg_write(RegisterARM64::X9, x9);
 
     let x8 = 0xdeadbeafdeadbeaf;
-    uc.reg_write(RegisterARM64::X8, x8).unwrap();
+    uc.reg_write(RegisterARM64::X8, x8);
 
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
@@ -140,7 +118,7 @@ fn test_arm64_v8_pac() {
 
 #[test]
 fn test_arm64_read_sctlr() {
-    let uc = Unicorn::new(Arch::ARM64, Mode::ARM | Mode::LITTLE_ENDIAN).unwrap();
+    let uc = Unicorn::<_, Arm64>::new(Mode::ARM | Mode::LITTLE_ENDIAN).unwrap();
 
     let mut reg = RegisterARM64CP::new().crn(1).op0(0b11);
     uc.reg_read_arm64_coproc(&mut reg).unwrap();
@@ -151,17 +129,16 @@ fn test_arm64_read_sctlr() {
 #[test]
 fn test_arm64_mrs_hook() {
     let code = &[0x62, 0xd0, 0x3b, 0xd5]; // mrs x2, tpidrro_el0
-    let mut uc = uc_common_setup(
-        Arch::ARM64,
+    let mut uc = uc_common_setup::<_, Arm64>(
         Mode::ARM | Mode::LITTLE_ENDIAN,
         Some(Arm64CpuModel::A72 as i32),
         code,
         (),
     );
 
-    uc.add_insn_sys_hook_arm64(Arm64Insn::UC_ARM64_INS_MRS, 1, 0, |uc, reg, _| {
+    uc.add_insn_sys_hook(Arm64Insn::UC_ARM64_INS_MRS, 1, 0, |uc, reg, _| {
         let x2 = 0x114514;
-        uc.reg_write(reg, x2).unwrap();
+        uc.reg_write(reg, x2);
 
         // Skip
         true
@@ -171,7 +148,7 @@ fn test_arm64_mrs_hook() {
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let x2 = uc.reg_read(RegisterARM64::X2).unwrap();
+    let x2 = uc.reg_read(RegisterARM64::X2);
     assert_eq!(x2, 0x114514);
 }
 
@@ -182,17 +159,11 @@ fn test_arm64_correct_address_in_small_jump_hook() {
         0x00, 0x00, 0x1f, 0xd6, // br x0
     ];
 
-    let mut uc = uc_common_setup(
-        Arch::ARM64,
-        Mode::ARM,
-        Some(Arm64CpuModel::A72 as i32),
-        code,
-        (),
-    );
+    let mut uc = uc_common_setup::<_, Arm64>(Mode::ARM, Some(Arm64CpuModel::A72 as i32), code, ());
 
     uc.add_mem_hook(HookType::MEM_UNMAPPED, 1, 0, |uc, _, address, _, _| {
-        let x0 = uc.reg_read(RegisterARM64::X0).unwrap();
-        let pc = uc.reg_read(RegisterARM64::PC).unwrap();
+        let x0 = uc.reg_read(RegisterARM64::X0);
+        let pc = uc.reg_read(RegisterARM64::PC);
         assert_eq!(x0, 0x7F00);
         assert_eq!(pc, 0x7F00);
         assert_eq!(address, 0x7F00);
@@ -203,10 +174,10 @@ fn test_arm64_correct_address_in_small_jump_hook() {
     let err = uc
         .emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap_err();
-    assert_eq!(err, uc_error::FETCH_UNMAPPED);
+    assert_eq!(err, UcError::FetchUnmapped);
 
-    let x0 = uc.reg_read(RegisterARM64::X0).unwrap();
-    let pc = uc.reg_read(RegisterARM64::PC).unwrap();
+    let x0 = uc.reg_read(RegisterARM64::X0);
+    let pc = uc.reg_read(RegisterARM64::PC);
     assert_eq!(x0, 0x7F00);
     assert_eq!(pc, 0x7F00);
 }
@@ -214,17 +185,11 @@ fn test_arm64_correct_address_in_small_jump_hook() {
 #[test]
 fn test_arm64_correct_address_in_long_jump_hook() {
     let code = &[0xe0, 0xdb, 0x78, 0xb2, 0x00, 0x00, 0x1f, 0xd6]; // mov x0, 0x7FFFFFFFFFFFFF00; br x0
-    let mut uc = uc_common_setup(
-        Arch::ARM64,
-        Mode::ARM,
-        Some(Arm64CpuModel::A72 as i32),
-        code,
-        (),
-    );
+    let mut uc = uc_common_setup::<_, Arm64>(Mode::ARM, Some(Arm64CpuModel::A72 as i32), code, ());
 
     uc.add_mem_hook(HookType::MEM_UNMAPPED, 1, 0, |uc, _, address, _, _| {
-        let x0 = uc.reg_read(RegisterARM64::X0).unwrap();
-        let pc = uc.reg_read(RegisterARM64::PC).unwrap();
+        let x0 = uc.reg_read(RegisterARM64::X0);
+        let pc = uc.reg_read(RegisterARM64::PC);
         assert_eq!(x0, 0x7FFFFFFFFFFFFF00);
         assert_eq!(pc, 0x7FFFFFFFFFFFFF00);
         assert_eq!(address, 0x7FFFFFFFFFFFFF00);
@@ -235,10 +200,10 @@ fn test_arm64_correct_address_in_long_jump_hook() {
     let err = uc
         .emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap_err();
-    assert_eq!(err, uc_error::FETCH_UNMAPPED);
+    assert_eq!(err, UcError::FetchUnmapped);
 
-    let x0 = uc.reg_read(RegisterARM64::X0).unwrap();
-    let pc = uc.reg_read(RegisterARM64::PC).unwrap();
+    let x0 = uc.reg_read(RegisterARM64::X0);
+    let pc = uc.reg_read(RegisterARM64::PC);
     assert_eq!(x0, 0x7FFFFFFFFFFFFF00);
     assert_eq!(pc, 0x7FFFFFFFFFFFFF00);
 }
@@ -251,33 +216,28 @@ fn test_arm64_block_sync_pc() {
         0xc1, 0xc5, 0x82, 0xd2, // t: mov x1, #5678
     ];
 
-    let mut uc = uc_common_setup(
-        Arch::ARM64,
-        Mode::ARM,
-        Some(Arm64CpuModel::A72 as i32),
-        code,
-        true,
-    );
+    let mut uc =
+        uc_common_setup::<_, Arm64>(Mode::ARM, Some(Arm64CpuModel::A72 as i32), code, true);
 
     uc.add_block_hook(CODE_START + 8, CODE_START + 12, |uc, addr, _| {
-        let pc = uc.reg_read(RegisterARM64::PC).unwrap();
+        let pc = uc.reg_read(RegisterARM64::PC);
         assert_eq!(pc, addr);
         let val = CODE_START;
         let first = *uc.get_data_mut();
         if first {
-            uc.reg_write(RegisterARM64::PC, val).unwrap();
+            uc.reg_write(RegisterARM64::PC, val);
             *uc.get_data_mut() = false;
         }
     })
     .unwrap();
 
     let x0 = 0;
-    uc.reg_write(RegisterARM64::X0, x0).unwrap();
+    uc.reg_write(RegisterARM64::X0, x0);
 
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let x0 = uc.reg_read(RegisterARM64::X0).unwrap();
+    let x0 = uc.reg_read(RegisterARM64::X0);
     assert_eq!(x0, 1234 * 2);
 }
 
@@ -289,13 +249,8 @@ fn test_arm64_block_invalid_mem_read_write_sync() {
         0x20, 0x00, 0x40, 0xf9, // ldr x0, [x1]
     ];
 
-    let mut uc = uc_common_setup(
-        Arch::ARM64,
-        Mode::ARM,
-        Some(Arm64CpuModel::A72 as i32),
-        code,
-        true,
-    );
+    let mut uc =
+        uc_common_setup::<_, Arm64>(Mode::ARM, Some(Arm64CpuModel::A72 as i32), code, true);
 
     uc.add_mem_hook(
         HookType::MEM_READ,
@@ -308,10 +263,10 @@ fn test_arm64_block_invalid_mem_read_write_sync() {
     let err = uc
         .emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap_err();
-    assert_eq!(err, uc_error::READ_UNMAPPED);
+    assert_eq!(err, UcError::ReadUnmapped);
 
-    let x0 = uc.reg_read(RegisterARM64::X0).unwrap();
-    let x1 = uc.reg_read(RegisterARM64::X1).unwrap();
+    let x0 = uc.reg_read(RegisterARM64::X0);
+    let x1 = uc.reg_read(RegisterARM64::X1);
     assert_eq!(x0, 1);
     assert_eq!(x1, 2);
 }
@@ -359,7 +314,7 @@ fn test_arm64_mmu() {
     let mut data = vec![0x44u8; 0x1000];
     let mut tlbe = [0x41, 0x07, 0, 0, 0, 0, 0, 0];
 
-    let mut uc = Unicorn::new(Arch::ARM64, Mode::ARM).unwrap();
+    let mut uc = Unicorn::<_, Arm64>::new(Mode::ARM).unwrap();
     uc.ctl_set_tlb_type(unicorn_engine_sys::TlbType::CPU)
         .unwrap();
     uc.mem_map(0, 0x2000, Prot::ALL).unwrap();
@@ -408,9 +363,9 @@ fn test_arm64_mmu() {
 
     uc.emu_start(0, 0x44, 0, 0).unwrap();
 
-    let x0 = uc.reg_read(RegisterARM64::X0).unwrap();
-    let x1 = uc.reg_read(RegisterARM64::X1).unwrap();
-    let x2 = uc.reg_read(RegisterARM64::X2).unwrap();
+    let x0 = uc.reg_read(RegisterARM64::X0);
+    let x1 = uc.reg_read(RegisterARM64::X1);
+    let x2 = uc.reg_read(RegisterARM64::X2);
 
     assert_eq!(x0, 0x80000000);
     assert_eq!(x1, 0x4444444444444444);
@@ -422,15 +377,15 @@ fn test_arm64_pc_wrap() {
     let code1 = &[0x20, 0x00, 0x02, 0x8b]; // add x1, x2, x3
     let code2 = &[0x20, 0x00, 0x03, 0x8b]; // add x1, x3, x3
 
-    let mut uc = Unicorn::new(Arch::ARM64, Mode::ARM).unwrap();
+    let mut uc = Unicorn::<_, Arm64>::new(Mode::ARM).unwrap();
     uc.mem_map(0xFFFFFFFFFFFFF000, 4096, Prot::READ | Prot::EXEC)
         .unwrap();
     uc.mem_write(0xFFFFFFFFFFFFFFFC, code1).unwrap();
 
     let x1 = 1;
     let x2 = 2;
-    uc.reg_write(RegisterARM64::X1, x1).unwrap();
-    uc.reg_write(RegisterARM64::X2, x2).unwrap();
+    uc.reg_write(RegisterARM64::X1, x1);
+    uc.reg_write(RegisterARM64::X2, x2);
 
     uc.emu_start(
         0xFFFFFFFFFFFFFFFC,
@@ -442,7 +397,7 @@ fn test_arm64_pc_wrap() {
 
     uc.mem_unmap(0xFFFFFFFFFFFFF000, 4096).unwrap();
 
-    let x0 = uc.reg_read(RegisterARM64::X0).unwrap();
+    let x0 = uc.reg_read(RegisterARM64::X0);
     assert_eq!(x0, 1 + 2);
 
     uc.mem_map(0xFFFFFFFFFFFFF000, 4096, Prot::READ | Prot::EXEC)
@@ -452,9 +407,9 @@ fn test_arm64_pc_wrap() {
     let x1 = 5;
     let x2 = 0;
     let x3 = 5;
-    uc.reg_write(RegisterARM64::X1, x1).unwrap();
-    uc.reg_write(RegisterARM64::X2, x2).unwrap();
-    uc.reg_write(RegisterARM64::X3, x3).unwrap();
+    uc.reg_write(RegisterARM64::X1, x1);
+    uc.reg_write(RegisterARM64::X2, x2);
+    uc.reg_write(RegisterARM64::X3, x3);
 
     uc.emu_start(
         0xFFFFFFFFFFFFFFFC,
@@ -466,7 +421,7 @@ fn test_arm64_pc_wrap() {
 
     uc.mem_unmap(0xFFFFFFFFFFFFF000, 4096).unwrap();
 
-    let x0 = uc.reg_read(RegisterARM64::X0).unwrap();
+    let x0 = uc.reg_read(RegisterARM64::X0);
     assert_eq!(x0, 5 + 5);
 }
 
@@ -474,7 +429,7 @@ fn test_arm64_pc_wrap() {
 fn test_arm64_mem_prot_regress() {
     let code = &[0x08, 0x40, 0x5e, 0x78]; // ldurh w8, [x0, #-0x1c]
 
-    let mut uc = Unicorn::new(Arch::ARM64, Mode::ARM).unwrap();
+    let mut uc = Unicorn::<_, Arm64>::new(Mode::ARM).unwrap();
 
     uc.mem_map(0, 0x4000, Prot::READ | Prot::EXEC).unwrap();
     uc.mem_map(0x4000, 0xC000, Prot::READ | Prot::WRITE)
@@ -496,7 +451,7 @@ fn test_arm64_mem_prot_regress() {
         .unwrap();
 
     let value = 0x801b;
-    uc.reg_write(RegisterARM64::X0, value).unwrap();
+    uc.reg_write(RegisterARM64::X0, value);
 
     uc.emu_start(0, code.len() as u64, 0, 0).unwrap();
 }
@@ -510,16 +465,11 @@ fn test_arm64_mem_hook_read_write() {
         0xe1, 0x0b, 0x00, 0xa9, // stp x1, x2, [sp]
     ];
 
-    let mut uc = uc_common_setup(
-        Arch::ARM64,
-        Mode::ARM,
-        Some(Arm64CpuModel::A72 as i32),
-        code,
-        [0, 0],
-    );
+    let mut uc =
+        uc_common_setup::<_, Arm64>(Mode::ARM, Some(Arm64CpuModel::A72 as i32), code, [0, 0]);
 
     let sp = 0x16db6a040;
-    uc.reg_write(RegisterARM64::SP, sp).unwrap();
+    uc.reg_write(RegisterARM64::SP, sp);
     uc.mem_map(0x16db68000, 1024 * 16, Prot::ALL).unwrap();
 
     uc.add_mem_hook(HookType::MEM_READ, 1, 0, |uc, _, _, _, _| {

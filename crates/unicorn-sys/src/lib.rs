@@ -3,21 +3,6 @@
 mod bindings;
 pub use bindings::*;
 
-impl uc_error {
-    /// Calls `op` if the result is Ok, otherwise returns the [`Err`] value of `self`.
-    pub fn and_then<U, F: FnOnce() -> Result<U, Self>>(self, op: F) -> Result<U, Self> {
-        if self == Self::OK { op() } else { Err(self) }
-    }
-
-    /// Returns `res` if the result is Ok, otherwise returns the [`Err`] value of `self`.
-    /// Arguments passed to this are eagerly evaluated; if you are passing the result
-    /// of a function call, it is recommended to use [`uc_error::and_then`] instead, as it's lazily
-    /// evaluated.
-    pub fn and<U>(self, res: Result<U, Self>) -> Result<U, Self> {
-        if self == Self::OK { res } else { Err(self) }
-    }
-}
-
 impl From<uc_error> for Result<(), uc_error> {
     fn from(value: uc_error) -> Self {
         if value == uc_error::OK {

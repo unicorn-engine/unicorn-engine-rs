@@ -3,32 +3,32 @@ use std::time::{Duration, Instant};
 use unicorn_engine_sys::{RegisterX86, X86Insn};
 
 use super::*;
-use crate::Unicorn;
+use crate::{UcError, Unicorn, arch::x86::X86};
 
 #[test]
 fn test_uc_ctl_mode() {
-    let uc = Unicorn::new(Arch::X86, Mode::MODE_32).unwrap();
+    let uc = Unicorn::<_, X86>::new(Mode::MODE_32).unwrap();
     let mode = uc.ctl_get_mode().unwrap();
     assert_eq!(mode, Mode::MODE_32);
 }
 
 #[test]
 fn test_uc_ctl_arch() {
-    let uc = Unicorn::new(Arch::X86, Mode::MODE_32).unwrap();
+    let uc = Unicorn::<_, X86>::new(Mode::MODE_32).unwrap();
     let arch = uc.ctl_get_arch().unwrap();
-    assert_eq!(arch, Arch::X86);
+    assert_eq!(arch, unicorn_engine_sys::Arch::X86);
 }
 
 #[test]
 fn test_uc_ctl_page_size() {
-    let uc = Unicorn::new(Arch::X86, Mode::MODE_32).unwrap();
+    let uc = Unicorn::<_, X86>::new(Mode::MODE_32).unwrap();
     let page_size = uc.ctl_get_page_size().unwrap();
     assert_eq!(page_size, 4096);
 }
 
 #[test]
 fn test_uc_ctl_timeout() {
-    let uc = Unicorn::new(Arch::X86, Mode::MODE_32).unwrap();
+    let uc = Unicorn::<_, X86>::new(Mode::MODE_32).unwrap();
     let timeout = uc.ctl_get_timeout().unwrap();
     assert_eq!(timeout, 0);
 }
@@ -47,22 +47,22 @@ fn test_uc_ctl_exits() {
     let ebx = 0;
     let exits = [CODE_START + 6, CODE_START + 8];
 
-    let mut uc = Unicorn::new(Arch::X86, Mode::MODE_32).unwrap();
+    let mut uc = Unicorn::<_, X86>::new(Mode::MODE_32).unwrap();
     uc.mem_map(CODE_START, CODE_LEN, Prot::ALL).unwrap();
     uc.mem_write(CODE_START, code).unwrap();
 
     uc.ctl_exits_enable().unwrap();
     uc.ctl_set_exits(&exits).unwrap();
 
-    uc.reg_write(RegisterX86::EAX, eax).unwrap();
-    uc.reg_write(RegisterX86::EBX, ebx).unwrap();
+    uc.reg_write(RegisterX86::EAX, eax);
+    uc.reg_write(RegisterX86::EBX, ebx);
 
     // Run twice.
     uc.emu_start(CODE_START, 0, 0, 0).unwrap();
     uc.emu_start(CODE_START, 0, 0, 0).unwrap();
 
-    let eax = uc.reg_read(RegisterX86::EAX).unwrap();
-    let ebx = uc.reg_read(RegisterX86::EBX).unwrap();
+    let eax = uc.reg_read(RegisterX86::EAX);
+    let ebx = uc.reg_read(RegisterX86::EBX);
 
     assert_eq!(eax, 1);
     assert_eq!(ebx, 1);
@@ -70,7 +70,7 @@ fn test_uc_ctl_exits() {
 
 #[test]
 fn test_uc_ctl_tb_cache() {
-    fn time_emulation(uc: &mut Unicorn<'_, ()>, start: u64, end: u64) -> Duration {
+    fn time_emulation(uc: &mut Unicorn<'_, (), X86>, start: u64, end: u64) -> Duration {
         let now = Instant::now();
         uc.emu_start(start, end, 0, 0).unwrap();
         now.elapsed()
@@ -82,7 +82,7 @@ fn test_uc_ctl_tb_cache() {
 
     let code = [0x90; CODE_LEN]; // nop
 
-    let mut uc = Unicorn::new(Arch::X86, Mode::MODE_32).unwrap();
+    let mut uc = Unicorn::<_, X86>::new(Mode::MODE_32).unwrap();
     uc.mem_map(CODE_START, CODE_LEN.try_into().unwrap(), Prot::ALL)
         .unwrap();
     uc.mem_write(CODE_START, &code).unwrap();
@@ -108,8 +108,10 @@ fn test_uc_ctl_tb_cache() {
 #[cfg(feature = "arch_arm")]
 #[test]
 fn test_uc_ctl_change_page_size() {
-    let mut uc = Unicorn::new(Arch::ARM, Mode::ARM).unwrap();
-    let mut uc2 = Unicorn::new(Arch::ARM, Mode::ARM).unwrap();
+    use crate::arch::arm::Arm;
+
+    let mut uc = Unicorn::<_, Arm>::new(Mode::ARM).unwrap();
+    let mut uc2 = Unicorn::<_, Arm>::new(Mode::ARM).unwrap();
 
     uc2.ctl_set_page_size(4096).unwrap();
     let page_size = uc2.ctl_get_page_size().unwrap();
@@ -127,15 +129,19 @@ fn test_uc_ctl_change_page_size() {
 fn test_uc_ctl_arm_cpu() {
     use unicorn_engine_sys::ArmCpuModel;
 
-    let mut uc = Unicorn::new(Arch::ARM, Mode::THUMB).unwrap();
+    use crate::arch::arm::Arm;
+
+    let mut uc = Unicorn::<_, Arm>::new(Mode::THUMB).unwrap();
     uc.ctl_set_cpu_model(ArmCpuModel::CORTEX_M7 as i32).unwrap();
 }
 
 #[cfg(feature = "arch_arm")]
 #[test]
 fn test_uc_ctl_change_page_size_arm64() {
-    let mut uc = Unicorn::new(Arch::ARM64, Mode::ARM).unwrap();
-    let mut uc2 = Unicorn::new(Arch::ARM64, Mode::ARM).unwrap();
+    use crate::arch::arm64::Arm64;
+
+    let mut uc = Unicorn::<_, Arm64>::new(Mode::ARM).unwrap();
+    let mut uc2 = Unicorn::<_, Arm64>::new(Mode::ARM).unwrap();
 
     uc2.ctl_set_page_size(16384).unwrap();
     let page_size = uc2.ctl_get_page_size().unwrap();
@@ -152,7 +158,7 @@ fn test_uc_ctl_change_page_size_arm64() {
 fn test_uc_hook_cached_uaf() {
     let code = b"\x41\x4a\xeb\x00\x90";
 
-    let mut uc = Unicorn::new_with_data(Arch::X86, Mode::MODE_32, 0u64).unwrap();
+    let mut uc = Unicorn::<_, X86>::new_with_data(Mode::MODE_32, 0u64).unwrap();
     uc.mem_map(CODE_START, CODE_LEN, Prot::ALL).unwrap();
     uc.mem_write(CODE_START, code).unwrap();
 
@@ -199,7 +205,7 @@ fn test_uc_emu_stop_set_ip() {
         0x90,             // 0xf    nop          :
     ];
 
-    let mut uc = Unicorn::new(Arch::X86, Mode::MODE_64).unwrap();
+    let mut uc = Unicorn::<_, X86>::new(Mode::MODE_64).unwrap();
     uc.mem_map(CODE_START, CODE_LEN, Prot::ALL).unwrap();
     uc.mem_write(CODE_START, code).unwrap();
 
@@ -210,7 +216,7 @@ fn test_uc_emu_stop_set_ip() {
             let rip = CODE_START + 0xb;
             if address == CODE_START + 0x7 {
                 uc.emu_stop().unwrap();
-                uc.reg_write(RegisterX86::RIP, rip).unwrap();
+                uc.reg_write(RegisterX86::RIP, rip);
             }
         },
     )
@@ -219,7 +225,7 @@ fn test_uc_emu_stop_set_ip() {
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let rip = uc.reg_read(RegisterX86::RIP).unwrap();
+    let rip = uc.reg_read(RegisterX86::RIP);
     assert_eq!(rip, CODE_START + 0xb);
 }
 
@@ -232,9 +238,8 @@ fn test_tlb_clear() {
         0xa3, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, // movabs  dword ptr [0x200000], eax
     ];
 
-    let mut uc = Unicorn::new_with_data(Arch::X86, Mode::MODE_64, 0usize).unwrap();
-    uc.mem_map(CODE_START, CODE_LEN.try_into().unwrap(), Prot::ALL)
-        .unwrap();
+    let mut uc = Unicorn::<_, X86>::new_with_data(Mode::MODE_64, 0usize).unwrap();
+    uc.mem_map(CODE_START, CODE_LEN, Prot::ALL).unwrap();
     uc.mem_write(CODE_START, code).unwrap();
 
     uc.mem_map(0x200000, 0x1000, Prot::ALL).unwrap();
@@ -268,16 +273,16 @@ fn test_noexec() {
         0x90,                               // nop
     ];
 
-    let mut uc = Unicorn::new(Arch::X86, Mode::MODE_64).unwrap();
+    let mut uc = Unicorn::<_, X86>::new(Mode::MODE_64).unwrap();
     uc.mem_map(CODE_START, CODE_LEN, Prot::ALL).unwrap();
     uc.mem_write(CODE_START, code).unwrap();
 
     uc.ctl_set_tlb_type(TlbType::VIRTUAL).unwrap();
-    uc.mem_protect(CODE_START, CODE_START as u64 + 0x1000, Prot::EXEC)
+    uc.mem_protect(CODE_START, CODE_START + 0x1000, Prot::EXEC)
         .unwrap();
 
     let err = uc
         .emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap_err();
-    assert_eq!(err, uc_error::READ_PROT);
+    assert_eq!(err, UcError::ReadProt);
 }

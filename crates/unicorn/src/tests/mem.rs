@@ -1,33 +1,35 @@
 use unicorn_engine_sys::{ContextMode, RegisterX86};
 
+use crate::{UcError, arch::x86::X86};
+
 use super::*;
 
 #[test]
 fn test_map_correct() {
-    let mut uc = Unicorn::new(Arch::X86, Mode::MODE_64).unwrap();
+    let mut uc = Unicorn::<_, X86>::new(Mode::MODE_64).unwrap();
 
     uc.mem_map(0x40000, 0x1000 * 16, Prot::ALL).unwrap(); // [0x40000, 0x50000]
     uc.mem_map(0x60000, 0x1000 * 16, Prot::ALL).unwrap(); // [0x60000, 0x70000]
     uc.mem_map(0x20000, 0x1000 * 16, Prot::ALL).unwrap(); // [0x20000, 0x30000]
     assert_eq!(
         uc.mem_map(0x10000, 0x2000 * 16, Prot::ALL),
-        Err(uc_error::MAP)
+        Err(UcError::InvalidMap)
     );
     assert_eq!(
         uc.mem_map(0x25000, 0x1000 * 16, Prot::ALL),
-        Err(uc_error::MAP)
+        Err(UcError::InvalidMap)
     );
     assert_eq!(
         uc.mem_map(0x35000, 0x1000 * 16, Prot::ALL),
-        Err(uc_error::MAP)
+        Err(UcError::InvalidMap)
     );
     assert_eq!(
         uc.mem_map(0x45000, 0x1000 * 16, Prot::ALL),
-        Err(uc_error::MAP)
+        Err(UcError::InvalidMap)
     );
     assert_eq!(
         uc.mem_map(0x55000, 0x2000 * 16, Prot::ALL),
-        Err(uc_error::MAP)
+        Err(UcError::InvalidMap)
     );
     uc.mem_map(0x35000, 0x5000, Prot::ALL).unwrap();
     uc.mem_map(0x50000, 0x5000, Prot::ALL).unwrap();
@@ -35,10 +37,10 @@ fn test_map_correct() {
 
 #[test]
 fn test_map_wrapping() {
-    let mut uc = Unicorn::new(Arch::X86, Mode::MODE_64).unwrap();
+    let mut uc = Unicorn::<_, X86>::new(Mode::MODE_64).unwrap();
     assert_eq!(
         uc.mem_map((!0 - 0x4000) & !0xfff, 0x8000, Prot::ALL),
-        Err(uc_error::ARG)
+        Err(UcError::InvalidArgument)
     );
 }
 
@@ -48,12 +50,12 @@ fn test_mem_protect() {
         0x01, 0x70, 0x04, // add [eax + 4], esi
     ];
 
-    let mut uc = Unicorn::new(Arch::X86, Mode::MODE_32).unwrap();
+    let mut uc = Unicorn::<_, X86>::new(Mode::MODE_32).unwrap();
     let eax = 0x2000;
     let esi = 0xdeadbeef;
 
-    uc.reg_write(RegisterX86::EAX, eax).unwrap();
-    uc.reg_write(RegisterX86::ESI, esi).unwrap();
+    uc.reg_write(RegisterX86::EAX, eax);
+    uc.reg_write(RegisterX86::ESI, esi);
     uc.mem_map(0x1000, 0x1000, Prot::READ | Prot::EXEC).unwrap();
     uc.mem_map(0x2000, 0x1000, Prot::READ).unwrap();
     uc.mem_protect(0x2000, 0x1000, Prot::READ | Prot::WRITE)
@@ -74,7 +76,7 @@ fn test_mem_protect() {
 
 #[test]
 fn test_splitting_mem_unmap() {
-    let mut uc = Unicorn::new(Arch::X86, Mode::MODE_32).unwrap();
+    let mut uc = Unicorn::<_, X86>::new(Mode::MODE_32).unwrap();
 
     uc.mem_map(0x20000, 0x1000, Prot::NONE).unwrap();
     uc.mem_map(0x21000, 0x2000, Prot::NONE).unwrap();
@@ -84,7 +86,7 @@ fn test_splitting_mem_unmap() {
 
 #[test]
 fn test_splitting_mmio_unmap() {
-    let mut uc = Unicorn::new(Arch::X86, Mode::MODE_32).unwrap();
+    let mut uc = Unicorn::<_, X86>::new(Mode::MODE_32).unwrap();
     let code = &[
         0x8b, 0x0d, 0x04, 0x30, 0x00, 0x00, // mov ecx, [0x3004] <-- normal read
         0x8b, 0x1d, 0x04, 0x40, 0x00, 0x00, // mov ebx, [0x4004] <-- mmio read
@@ -109,8 +111,8 @@ fn test_splitting_mmio_unmap() {
     uc.emu_start(0x1000, 0x1000 + code.len() as u64, 0, 0)
         .unwrap();
 
-    let ecx = uc.reg_read(RegisterX86::ECX).unwrap();
-    let ebx = uc.reg_read(RegisterX86::EBX).unwrap();
+    let ecx = uc.reg_read(RegisterX86::ECX);
+    let ebx = uc.reg_read(RegisterX86::EBX);
 
     assert_eq!(ecx, 0xdeadbeef);
     assert_eq!(ebx, 0x19260817);
@@ -118,7 +120,7 @@ fn test_splitting_mmio_unmap() {
 
 #[test]
 fn test_mem_protect_map_ptr() {
-    let mut uc = Unicorn::new(Arch::X86, Mode::MODE_64).unwrap();
+    let mut uc = Unicorn::<_, X86>::new(Mode::MODE_64).unwrap();
     let val = 0x114514u64;
     let mut data1 = vec![0u8; 0x4000];
     let mut data2 = vec![0u8; 0x2000];
@@ -143,7 +145,7 @@ fn test_mem_protect_map_ptr() {
 
 #[test]
 fn test_map_at_the_end() {
-    let mut uc = Unicorn::new(Arch::X86, Mode::MODE_64).unwrap();
+    let mut uc = Unicorn::<_, X86>::new(Mode::MODE_64).unwrap();
     let mem = vec![0xffu8; 0x1000];
 
     uc.mem_map(0xfffffffffffff000, 0x1000, Prot::ALL).unwrap();
@@ -151,18 +153,18 @@ fn test_map_at_the_end() {
 
     assert_eq!(
         uc.mem_write(0xffffffffffffff00, &mem),
-        Err(uc_error::WRITE_UNMAPPED)
+        Err(UcError::WriteUnmapped)
     );
-    assert_eq!(uc.mem_write(0, &mem), Err(uc_error::WRITE_UNMAPPED));
+    assert_eq!(uc.mem_write(0, &mem), Err(UcError::WriteUnmapped));
 }
 
 #[test]
 fn test_map_big_memory() {
-    let mut uc = Unicorn::new(Arch::X86, Mode::MODE_64).unwrap();
+    let mut uc = Unicorn::<_, X86>::new(Mode::MODE_64).unwrap();
     let requested_size = !(page_size::get() - 1);
     assert_eq!(
         uc.mem_map(0x0, requested_size.try_into().unwrap(), Prot::ALL),
-        Err(uc_error::NOMEM)
+        Err(UcError::NoMemory)
     );
 }
 
@@ -175,7 +177,7 @@ fn test_mem_protect_remove_exec() {
         0x90,       // nop
     ];
 
-    let mut uc = Unicorn::new_with_data(Arch::X86, Mode::MODE_64, 0).unwrap();
+    let mut uc = Unicorn::<_, X86>::new_with_data(Mode::MODE_64, 0).unwrap();
 
     uc.mem_map(0x1000, 0x1000, Prot::ALL).unwrap();
     uc.mem_map(0x2000, 0x1000, Prot::ALL).unwrap();
@@ -201,7 +203,7 @@ fn test_mem_protect_mmio() {
         0xa3, 0x20, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // movabs dword ptr [0x2020], eax
     ];
 
-    let mut uc = Unicorn::new_with_data(Arch::X86, Mode::MODE_64, 0).unwrap();
+    let mut uc = Unicorn::<_, X86>::new_with_data(Mode::MODE_64, 0).unwrap();
 
     uc.mem_map(0x8000, 0x1000, Prot::ALL).unwrap();
     uc.mem_write(0x8000, &code).unwrap();
@@ -209,12 +211,12 @@ fn test_mem_protect_mmio() {
     uc.mmio_map(
         0x1000,
         0x3000,
-        Some(|uc: &mut Unicorn<'_, i32>, addr, _| {
+        Some(|uc: &mut Unicorn<'_, i32, _>, addr, _| {
             assert_eq!(addr, 0x20);
             *uc.get_data_mut() += 1;
             0x114514
         }),
-        Some(|_: &mut Unicorn<'_, i32>, _addr, _size, _val| {
+        Some(|_: &mut Unicorn<'_, i32, _>, _addr, _size, _val| {
             panic!("Write callback should not be called");
         }),
     )
@@ -223,9 +225,9 @@ fn test_mem_protect_mmio() {
 
     assert_eq!(
         uc.emu_start(0x8000, 0x8000 + code.len() as u64, 0, 0),
-        Err(uc_error::WRITE_PROT)
+        Err(UcError::WriteProt)
     );
-    let eax = uc.reg_read(RegisterX86::RAX).unwrap();
+    let eax = uc.reg_read(RegisterX86::RAX);
 
     assert_eq!(*uc.get_data_mut(), 1);
     assert_eq!(eax, 0x114514u64);
@@ -240,7 +242,7 @@ fn test_snapshot() {
         0xa3, 0x20, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // movabs dword ptr [0x2020], eax
     ];
 
-    let mut uc = Unicorn::new(Arch::X86, Mode::MODE_64).unwrap();
+    let mut uc = Unicorn::<_, X86>::new(Mode::MODE_64).unwrap();
     let mut c0 = uc.context_alloc().unwrap();
     let mut c1 = uc.context_alloc().unwrap();
     uc.ctl_set_context_mode(ContextMode::MEMORY).unwrap();
@@ -345,7 +347,7 @@ fn test_snapshot_with_vtlb() {
         0xa3, 0x20, 0x20, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, // movabs dword ptr [0x2020], eax
     ];
 
-    let mut uc = Unicorn::new(Arch::X86, Mode::MODE_64).unwrap();
+    let mut uc = Unicorn::<_, X86>::new(Mode::MODE_64).unwrap();
 
     // Allocate contexts
     let mut c0 = uc.context_alloc().unwrap();
@@ -401,7 +403,7 @@ fn test_snapshot_with_vtlb() {
 
 #[test]
 fn test_context_snapshot() {
-    let mut uc = Unicorn::new(Arch::X86, Mode::MODE_64).unwrap();
+    let mut uc = Unicorn::<_, X86>::new(Mode::MODE_64).unwrap();
     let baseaddr = 0xfffff1000;
     let offset = 0x10;
     let mut tmp = 1u64;
@@ -485,7 +487,7 @@ fn test_context_snapshot() {
 
 #[test]
 fn test_snapshot_unmap() {
-    let mut uc = Unicorn::new(Arch::X86, Mode::MODE_64).unwrap();
+    let mut uc = Unicorn::<_, X86>::new(Mode::MODE_64).unwrap();
     let offset = 0x10;
 
     uc.ctl_set_context_mode(ContextMode::MEMORY | ContextMode::CPU)
@@ -500,15 +502,18 @@ fn test_snapshot_unmap() {
     let mut ctx = uc.context_alloc().unwrap();
     uc.context_save(&mut ctx).unwrap();
 
-    assert_eq!(uc.mem_unmap(0x1000, 0x1000).unwrap_err(), uc_error::ARG);
+    assert_eq!(
+        uc.mem_unmap(0x1000, 0x1000).unwrap_err(),
+        UcError::InvalidArgument
+    );
     uc.mem_unmap(0x1000, 0x2000).unwrap();
     assert_eq!(
         uc.mem_read_as_vec(0x1000 + offset, 8).unwrap_err(),
-        uc_error::READ_UNMAPPED,
+        UcError::ReadUnmapped,
     );
     assert_eq!(
         uc.mem_read_as_vec(0x2000 + offset, 8).unwrap_err(),
-        uc_error::READ_UNMAPPED,
+        UcError::ReadUnmapped,
     );
 
     uc.context_restore(&ctx).unwrap();
