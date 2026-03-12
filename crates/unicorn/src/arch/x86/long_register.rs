@@ -1,11 +1,11 @@
 use crate::{UcArch, X86, long_register::LongRegister, mk_long_regs};
 
 // a proc macro (or the paste crate) would be great here
-mk_long_regs!(RegisterDt, X86, 10, GDTR, IDTR);
-mk_long_regs!(RegisterSt, X86, 10, ST0, ST1, ST2, ST3, ST4, ST5, ST6, ST7);
+mk_long_regs!(RegisterDT, X86, 10, GDTR, IDTR);
+mk_long_regs!(RegisterST, X86, 10, ST0, ST1, ST2, ST3, ST4, ST5, ST6, ST7);
 
 mk_long_regs!(
-    RegisterXmm,
+    RegisterXMM,
     X86,
     16,
     XMM0,
