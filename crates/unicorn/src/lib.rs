@@ -536,7 +536,9 @@ impl<'a, D> Unicorn<'a, D> {
     /// `size` must be a multiple of 4kb or this will return `Error::ARG`.
     pub fn mem_unmap(&mut self, address: u64, size: u64) -> Result<(), uc_error> {
         let err = unsafe { uc_mem_unmap(self.get_handle(), address, size) };
-        self.mmio_unmap(address, size);
+        if err == uc_error::OK {
+            self.mmio_unmap(address, size);
+        }
         err.into()
     }
 

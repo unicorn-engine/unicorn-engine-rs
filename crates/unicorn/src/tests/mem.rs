@@ -117,6 +117,16 @@ fn test_splitting_mmio_unmap() {
 }
 
 #[test]
+fn test_failed_mmio_unmap_keeps_callback_region() {
+    let mut uc = Unicorn::new(Arch::X86, Mode::MODE_32).unwrap();
+
+    uc.mmio_map_ro(0x3000, 0x1000, |_, _, _| 0).unwrap();
+
+    assert_eq!(uc.mem_unmap(0x3000, 0x800), Err(uc_error::ARG));
+    assert_eq!(uc.inner().mmio_callbacks[0].regions, vec![(0x3000, 0x1000)]);
+}
+
+#[test]
 fn test_mem_protect_map_ptr() {
     let mut uc = Unicorn::new(Arch::X86, Mode::MODE_64).unwrap();
     let val = 0x114514u64;
