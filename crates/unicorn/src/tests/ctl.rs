@@ -3,7 +3,77 @@ use std::time::{Duration, Instant};
 use unicorn_engine_sys::{RegisterX86, X86Insn};
 
 use super::*;
-use crate::Unicorn;
+use crate::{
+    API_EXTRA, API_MAJOR, API_MINOR, API_PATCH, Unicorn, arch_supported, strerror, version,
+};
+
+#[test]
+fn test_uc_version() {
+    let (major, minor, combined) = version();
+    let patch = API_PATCH as u32;
+    let extra = API_EXTRA as u32;
+    let expected_combined =
+        (major as u32) << 24 | (minor as u32) << 16 | (patch as u32) << 8 | (extra as u32);
+
+    assert_eq!(major, API_MAJOR as u32);
+    assert_eq!(minor, API_MINOR as u32);
+    assert_eq!(combined, expected_combined);
+}
+
+#[test]
+fn test_uc_arch_supported() {
+    assert!(arch_supported(Arch::X86));
+}
+
+#[test]
+fn test_uc_errno() {
+    let uc = Unicorn::new(Arch::X86, Mode::MODE_32).unwrap();
+
+    assert_eq!(uc.errno(), uc_error::OK);
+}
+
+#[test]
+fn test_uc_context_size() {
+    let uc = Unicorn::new(Arch::X86, Mode::MODE_32).unwrap();
+
+    assert!(uc.context_size() > 0);
+}
+
+#[test]
+fn test_strerror() {
+    for (error, marker) in [
+        (uc_error::OK, "UC_ERR_OK"),
+        (uc_error::NOMEM, "UC_ERR_NOMEM"),
+        (uc_error::ARCH, "UC_ERR_ARCH"),
+        (uc_error::HANDLE, "UC_ERR_HANDLE"),
+        (uc_error::MODE, "UC_ERR_MODE"),
+        (uc_error::VERSION, "UC_ERR_VERSION"),
+        (uc_error::READ_UNMAPPED, "UC_ERR_READ_UNMAPPED"),
+        (uc_error::WRITE_UNMAPPED, "UC_ERR_WRITE_UNMAPPED"),
+        (uc_error::FETCH_UNMAPPED, "UC_ERR_FETCH_UNMAPPED"),
+        (uc_error::HOOK, "UC_ERR_HOOK"),
+        (uc_error::INSN_INVALID, "UC_ERR_INSN_INVALID"),
+        (uc_error::MAP, "UC_ERR_MAP"),
+        (uc_error::WRITE_PROT, "UC_ERR_WRITE_PROT"),
+        (uc_error::READ_PROT, "UC_ERR_READ_PROT"),
+        (uc_error::FETCH_PROT, "UC_ERR_FETCH_PROT"),
+        (uc_error::ARG, "UC_ERR_ARG"),
+        (uc_error::READ_UNALIGNED, "UC_ERR_READ_UNALIGNED"),
+        (uc_error::WRITE_UNALIGNED, "UC_ERR_WRITE_UNALIGNED"),
+        (uc_error::FETCH_UNALIGNED, "UC_ERR_FETCH_UNALIGNED"),
+        (uc_error::RESOURCE, "UC_ERR_RESOURCE"),
+        (uc_error::EXCEPTION, "UC_ERR_EXCEPTION"),
+        (uc_error::OVERFLOW, "UC_ERR_OVERFLOW"),
+        (uc_error::MMU_READ, "UC_ERR_MMU_READ"),
+        (uc_error::MMU_WRITE, "UC_ERR_MMU_WRITE"),
+        (uc_error::MMU_FETCH, "UC_ERR_MMU_FETCH"),
+    ] {
+        // skip UC_ERR_HOOK_EXIST
+        // https://github.com/unicorn-engine/unicorn/commit/93052f6
+        let description = strerror(error);
+        assert!(description.contains(marker), "{error:?}: {description}");
+    }
+}
 
 #[test]
 fn test_uc_ctl_mode() {
@@ -280,4 +350,98 @@ fn test_noexec() {
         .emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap_err();
     assert_eq!(err, uc_error::READ_PROT);
+}
+
+#[test]
+fn test_regs_bytes_rw() {
+    let mut uc = Unicorn::new(Arch::X86, Mode::MODE_64).unwrap();
+    let value = [0x5a; 16];
+    let mut read_back = [0; 16];
+
+    assert_eq!(uc.reg_write_bytes(RegisterX86::XMM0, &value), Ok(16));
+    assert_eq!(uc.reg_read_bytes(RegisterX86::XMM0, &mut read_back), Ok(16));
+    assert_eq!(read_back, value);
+
+    // test write batch
+    let eax = 0x1122_3344u32.to_le_bytes();
+    let ebx = 0x5566_7788u32.to_le_bytes();
+    assert_eq!(
+        uc.reg_write_batch_bytes(&[RegisterX86::EAX, RegisterX86::EBX], &[&eax, &ebx],),
+        Ok(vec![4, 4])
+    );
+
+    // test read batch
+    let mut read_eax = [0; 4];
+    let mut read_ebx = [0; 4];
+    assert_eq!(
+        uc.reg_read_batch_bytes(
+            &[RegisterX86::EAX, RegisterX86::EBX],
+            &mut [&mut read_eax, &mut read_ebx],
+        ),
+        Ok(vec![4, 4])
+    );
+    assert_eq!(read_eax, eax);
+    assert_eq!(read_ebx, ebx);
+
+    // match invalid argument error
+    assert_eq!(
+        uc.reg_read_batch_bytes(&[RegisterX86::EAX], &mut []),
+        Err(uc_error::ARG)
+    );
+}
+
+#[test]
+fn test_context_reg_bytes_rw() {
+    let uc = Unicorn::new(Arch::X86, Mode::MODE_64).unwrap();
+    let mut context = uc.context_init().unwrap();
+    let value = 0x1234_5678u32.to_le_bytes();
+    let mut read_back = [0; 4];
+
+    assert_eq!(context.reg_write_bytes(RegisterX86::EAX, &value), Ok(4));
+    assert_eq!(
+        context.reg_read_bytes(RegisterX86::EAX, &mut read_back),
+        Ok(4)
+    );
+    assert_eq!(read_back, value);
+}
+
+#[test]
+fn test_context_reg_batch_bytes_rw() {
+    let uc = Unicorn::new(Arch::X86, Mode::MODE_64).unwrap();
+    let mut context = uc.context_init().unwrap();
+    let regs = [RegisterX86::EAX, RegisterX86::EBX];
+    let eax = 0x1234_5678u32.to_le_bytes();
+    let ebx = 0x9abc_def0u32.to_le_bytes();
+
+    assert_eq!(
+        context.reg_write_batch_bytes(&regs, &[&eax, &ebx],),
+        Ok(vec![4, 4])
+    );
+}
+
+#[test]
+fn test_context_reg_batch_rw() {
+    let uc = Unicorn::new(Arch::X86, Mode::MODE_64).unwrap();
+    let mut context = uc.context_init().unwrap();
+    let regs = [RegisterX86::RAX, RegisterX86::RBX];
+    let values = [0x1122_3344_5566_7788, 0x8877_6655_4433_2211];
+
+    assert_eq!(context.reg_write_batch(&regs, &values), Ok(()));
+    assert_eq!(context.reg_read_batch(&regs), Ok(values.to_vec()));
+    assert_eq!(
+        context.reg_write_batch(&[RegisterX86::RAX], &[]),
+        Err(uc_error::ARG)
+    );
+}
+
+#[test]
+fn test_tcg_buffer_size() {
+    const REQUESTED_SIZE: u32 = 1024 * 1024;
+
+    let mut uc = Unicorn::new(Arch::X86, Mode::MODE_64).unwrap();
+    uc.ctl_set_tcg_buffer_size(REQUESTED_SIZE).unwrap();
+
+    let buffer_size = uc.ctl_get_tcg_buffer_size().unwrap();
+    assert!(buffer_size > 0);
+    assert!(buffer_size <= REQUESTED_SIZE);
 }
