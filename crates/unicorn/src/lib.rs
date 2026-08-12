@@ -42,8 +42,8 @@
 #[macro_use]
 extern crate alloc;
 
-use alloc::{boxed::Box, rc::Rc, vec::Vec};
-use core::{cell::UnsafeCell, ffi::c_void, ptr};
+use alloc::{boxed::Box, vec::Vec};
+use core::{ffi::c_void, ptr};
 
 #[macro_use]
 pub mod unicorn_const;
@@ -137,6 +137,65 @@ impl MmioCallbackScope<'_> {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct UcHookId(uc_hook);
 
+pub struct HookContext {
+    handle: *mut uc_engine,
+}
+
+impl HookContext {
+    pub(crate) fn from_handle(handle: *mut uc_engine) -> Self {
+        Self { handle }
+    }
+
+    pub fn get_handle(&self) -> *mut uc_engine {
+        self.handle
+    }
+
+    pub fn mem_read(&self, address: u64, buf: &mut [u8]) -> Result<(), uc_error> {
+        unsafe {
+            uc_mem_read(
+                self.handle,
+                address,
+                buf.as_mut_ptr().cast(),
+                buf.len() as u64,
+            )
+        }
+        .into()
+    }
+
+    pub fn mem_write(&mut self, address: u64, bytes: &[u8]) -> Result<(), uc_error> {
+        unsafe {
+            uc_mem_write(
+                self.handle,
+                address,
+                bytes.as_ptr().cast(),
+                bytes.len() as u64,
+            )
+        }
+        .into()
+    }
+
+    pub fn reg_read<T: Into<i32>>(&self, regid: T) -> Result<u64, uc_error> {
+        let mut value = 0;
+        unsafe { uc_reg_read(self.handle, regid.into(), (&raw mut value).cast()) }.and(Ok(value))
+    }
+
+    pub fn reg_write<T: Into<i32>>(&mut self, regid: T, value: u64) -> Result<(), uc_error> {
+        unsafe { uc_reg_write(self.handle, regid.into(), (&raw const value).cast()) }.into()
+    }
+
+    pub fn emu_stop(&mut self) -> Result<(), uc_error> {
+        unsafe { uc_emu_stop(self.handle) }.into()
+    }
+
+    pub fn mem_protect(&mut self, address: u64, size: u64, perms: Prot) -> Result<(), uc_error> {
+        unsafe { uc_mem_protect(self.handle, address, size, perms.0 as _) }.into()
+    }
+
+    pub fn ctl_flush_tlb(&mut self) -> Result<(), uc_error> {
+        unsafe { uc_ctl(self.handle, UC_CTL_WRITE!(ControlType::TLB_FLUSH)) }.into()
+    }
+}
+
 pub struct UnicornInner<'a, D> {
     pub handle: *mut uc_engine,
     pub ffi: bool,
@@ -158,10 +217,8 @@ impl<D> Drop for UnicornInner<'_, D> {
 }
 
 /// A Unicorn emulator instance.
-///
-/// You could clone this instance cheaply, since it has an `Rc` inside.
 pub struct Unicorn<'a, D: 'a> {
-    inner: Rc<UnsafeCell<UnicornInner<'a, D>>>,
+    inner: Box<UnicornInner<'a, D>>,
 }
 
 impl<'a> Unicorn<'a, ()> {
@@ -192,14 +249,14 @@ where
         let mut handle = ptr::null_mut();
         unsafe { uc_open(arch, mode, &mut handle) }.and_then(|| {
             Ok(Unicorn {
-                inner: Rc::new(UnsafeCell::from(UnicornInner {
+                inner: Box::new(UnicornInner {
                     handle,
                     ffi: false,
                     arch,
                     data,
                     hooks: vec![],
                     mmio_callbacks: vec![],
-                })),
+                }),
             })
         })
     }
@@ -223,14 +280,14 @@ where
             return Err(err);
         }
         Ok(Unicorn {
-            inner: Rc::new(UnsafeCell::from(UnicornInner {
+            inner: Box::new(UnicornInner {
                 handle,
                 ffi: true,
                 arch: arch.try_into()?,
                 data,
                 hooks: vec![],
                 mmio_callbacks: vec![],
-            })),
+            }),
         })
     }
 }
@@ -241,21 +298,13 @@ impl<D> core::fmt::Debug for Unicorn<'_, D> {
     }
 }
 
-impl<D> Clone for Unicorn<'_, D> {
-    fn clone(&self) -> Self {
-        Self {
-            inner: Rc::clone(&self.inner),
-        }
-    }
-}
-
 impl<'a, D> Unicorn<'a, D> {
     fn inner(&self) -> &UnicornInner<'a, D> {
-        unsafe { self.inner.get().as_ref().unwrap() }
+        &self.inner
     }
 
     fn inner_mut(&mut self) -> &mut UnicornInner<'a, D> {
-        unsafe { self.inner.get().as_mut().unwrap() }
+        &mut self.inner
     }
 
     /// Return whatever data was passed during initialization.
@@ -442,19 +491,19 @@ impl<'a, D> Unicorn<'a, D> {
         write_callback: Option<W>,
     ) -> Result<(), uc_error>
     where
-        R: FnMut(&mut Unicorn<'_, D>, u64, usize) -> u64 + 'a,
-        W: FnMut(&mut Unicorn<'_, D>, u64, usize, u64) + 'a,
+        R: FnMut(&mut HookContext, u64, usize) -> u64 + 'a,
+        W: FnMut(&mut HookContext, u64, usize, u64) + 'a,
     {
         let mut read_data = read_callback.map(|c| {
             Box::new(hook::UcHook {
                 callback: c,
-                uc: Rc::downgrade(&self.inner),
+                marker: core::marker::PhantomData::<&'a D>,
             })
         });
         let mut write_data = write_callback.map(|c| {
             Box::new(hook::UcHook {
                 callback: c,
-                uc: Rc::downgrade(&self.inner),
+                marker: core::marker::PhantomData::<&'a D>,
             })
         });
 
@@ -504,13 +553,13 @@ impl<'a, D> Unicorn<'a, D> {
     /// `size` must be a multiple of 4kb or this will return `Error::ARG`.
     pub fn mmio_map_ro<F>(&mut self, address: u64, size: u64, callback: F) -> Result<(), uc_error>
     where
-        F: FnMut(&mut Unicorn<D>, u64, usize) -> u64 + 'a,
+        F: FnMut(&mut HookContext, u64, usize) -> u64 + 'a,
     {
         self.mmio_map(
             address,
             size,
             Some(callback),
-            None::<fn(&mut Unicorn<D>, u64, usize, u64)>,
+            None::<fn(&mut HookContext, u64, usize, u64)>,
         )
     }
 
@@ -520,12 +569,12 @@ impl<'a, D> Unicorn<'a, D> {
     /// `size` must be a multiple of 4kb or this will return `Error::ARG`.
     pub fn mmio_map_wo<F>(&mut self, address: u64, size: u64, callback: F) -> Result<(), uc_error>
     where
-        F: FnMut(&mut Unicorn<D>, u64, usize, u64) + 'a,
+        F: FnMut(&mut HookContext, u64, usize, u64) + 'a,
     {
         self.mmio_map(
             address,
             size,
-            None::<fn(&mut Unicorn<D>, u64, usize) -> u64>,
+            None::<fn(&mut HookContext, u64, usize) -> u64>,
             Some(callback),
         )
     }
@@ -777,12 +826,12 @@ impl<'a, D> Unicorn<'a, D> {
         callback: F,
     ) -> Result<UcHookId, uc_error>
     where
-        F: FnMut(&mut Unicorn<D>, u64, u32) + 'a,
+        F: FnMut(&mut HookContext, u64, u32) + 'a,
     {
         let mut hook_id = 0;
         let mut user_data = Box::new(hook::UcHook {
             callback,
-            uc: Rc::downgrade(&self.inner),
+            marker: core::marker::PhantomData::<&'a D>,
         });
 
         unsafe {
@@ -811,12 +860,12 @@ impl<'a, D> Unicorn<'a, D> {
         callback: F,
     ) -> Result<UcHookId, uc_error>
     where
-        F: FnMut(&mut Unicorn<D>, u64, u32) + 'a,
+        F: FnMut(&mut HookContext, u64, u32) + 'a,
     {
         let mut hook_id = 0;
         let mut user_data = Box::new(hook::UcHook {
             callback,
-            uc: Rc::downgrade(&self.inner),
+            marker: core::marker::PhantomData::<&'a D>,
         });
 
         unsafe {
@@ -846,7 +895,7 @@ impl<'a, D> Unicorn<'a, D> {
         callback: F,
     ) -> Result<UcHookId, uc_error>
     where
-        F: FnMut(&mut Unicorn<D>, MemType, u64, usize, i64) -> bool + 'a,
+        F: FnMut(&mut HookContext, MemType, u64, usize, i64) -> bool + 'a,
     {
         if hook_type & (HookType::MEM_ALL | HookType::MEM_READ_AFTER) != hook_type {
             return Err(uc_error::ARG);
@@ -855,7 +904,7 @@ impl<'a, D> Unicorn<'a, D> {
         let mut hook_id = 0;
         let mut user_data = Box::new(hook::UcHook {
             callback,
-            uc: Rc::downgrade(&self.inner),
+            marker: core::marker::PhantomData::<&'a D>,
         });
 
         unsafe {
@@ -879,12 +928,12 @@ impl<'a, D> Unicorn<'a, D> {
     /// Add an interrupt hook.
     pub fn add_intr_hook<F>(&mut self, callback: F) -> Result<UcHookId, uc_error>
     where
-        F: FnMut(&mut Unicorn<D>, u32) + 'a,
+        F: FnMut(&mut HookContext, u32) + 'a,
     {
         let mut hook_id = 0;
         let mut user_data = Box::new(hook::UcHook {
             callback,
-            uc: Rc::downgrade(&self.inner),
+            marker: core::marker::PhantomData::<&'a D>,
         });
 
         unsafe {
@@ -908,12 +957,12 @@ impl<'a, D> Unicorn<'a, D> {
     /// Add hook for invalid instructions
     pub fn add_insn_invalid_hook<F>(&mut self, callback: F) -> Result<UcHookId, uc_error>
     where
-        F: FnMut(&mut Unicorn<D>) -> bool + 'a,
+        F: FnMut(&mut HookContext) -> bool + 'a,
     {
         let mut hook_id = 0;
         let mut user_data = Box::new(hook::UcHook {
             callback,
-            uc: Rc::downgrade(&self.inner),
+            marker: core::marker::PhantomData::<&'a D>,
         });
 
         unsafe {
@@ -938,12 +987,12 @@ impl<'a, D> Unicorn<'a, D> {
     #[cfg(feature = "arch_x86")]
     pub fn add_insn_in_hook<F>(&mut self, callback: F) -> Result<UcHookId, uc_error>
     where
-        F: FnMut(&mut Unicorn<D>, u32, usize) -> u32 + 'a,
+        F: FnMut(&mut HookContext, u32, usize) -> u32 + 'a,
     {
         let mut hook_id = 0;
         let mut user_data = Box::new(hook::UcHook {
             callback,
-            uc: Rc::downgrade(&self.inner),
+            marker: core::marker::PhantomData::<&'a D>,
         });
 
         unsafe {
@@ -969,12 +1018,12 @@ impl<'a, D> Unicorn<'a, D> {
     #[cfg(feature = "arch_x86")]
     pub fn add_insn_out_hook<F>(&mut self, callback: F) -> Result<UcHookId, uc_error>
     where
-        F: FnMut(&mut Unicorn<D>, u32, usize, u32) + 'a,
+        F: FnMut(&mut HookContext, u32, usize, u32) + 'a,
     {
         let mut hook_id = 0;
         let mut user_data = Box::new(hook::UcHook {
             callback,
-            uc: Rc::downgrade(&self.inner),
+            marker: core::marker::PhantomData::<&'a D>,
         });
 
         unsafe {
@@ -1006,12 +1055,12 @@ impl<'a, D> Unicorn<'a, D> {
         callback: F,
     ) -> Result<UcHookId, uc_error>
     where
-        F: FnMut(&mut Unicorn<D>) + 'a,
+        F: FnMut(&mut HookContext) + 'a,
     {
         let mut hook_id = 0;
         let mut user_data = Box::new(hook::UcHook {
             callback,
-            uc: Rc::downgrade(&self.inner),
+            marker: core::marker::PhantomData::<&'a D>,
         });
 
         unsafe {
@@ -1046,12 +1095,12 @@ impl<'a, D> Unicorn<'a, D> {
         callback: F,
     ) -> Result<UcHookId, uc_error>
     where
-        F: FnMut(&mut Unicorn<D>, RegisterARM64, &RegisterARM64CP) -> bool + 'a,
+        F: FnMut(&mut HookContext, RegisterARM64, &RegisterARM64CP) -> bool + 'a,
     {
         let mut hook_id = 0;
         let mut user_data = Box::new(hook::UcHook {
             callback,
-            uc: Rc::downgrade(&self.inner),
+            marker: core::marker::PhantomData::<&'a D>,
         });
 
         unsafe {
@@ -1080,12 +1129,12 @@ impl<'a, D> Unicorn<'a, D> {
         callback: F,
     ) -> Result<UcHookId, uc_error>
     where
-        F: FnMut(&mut Unicorn<D>, u64, MemType) -> Option<TlbEntry> + 'a,
+        F: FnMut(&mut HookContext, u64, MemType) -> Option<TlbEntry> + 'a,
     {
         let mut hook_id = 0;
         let mut user_data = Box::new(hook::UcHook {
             callback,
-            uc: Rc::downgrade(&self.inner),
+            marker: core::marker::PhantomData::<&'a D>,
         });
 
         unsafe {
@@ -1115,12 +1164,12 @@ impl<'a, D> Unicorn<'a, D> {
         callback: F,
     ) -> Result<UcHookId, uc_error>
     where
-        F: FnMut(&mut Unicorn<D>, u64, u64, u64, usize) + 'a,
+        F: FnMut(&mut HookContext, u64, u64, u64, usize) + 'a,
     {
         let mut hook_id = 0;
         let mut user_data = Box::new(hook::UcHook {
             callback,
-            uc: Rc::downgrade(&self.inner),
+            marker: core::marker::PhantomData::<&'a D>,
         });
 
         unsafe {
@@ -1153,12 +1202,12 @@ impl<'a, D> Unicorn<'a, D> {
         callback: F,
     ) -> Result<UcHookId, uc_error>
     where
-        F: FnMut(&mut Unicorn<D>, &mut TranslationBlock, &mut TranslationBlock) + 'a,
+        F: FnMut(&mut HookContext, &mut TranslationBlock, &mut TranslationBlock) + 'a,
     {
         let mut hook_id = 0;
         let mut user_data = Box::new(hook::UcHook {
             callback,
-            uc: Rc::downgrade(&self.inner),
+            marker: core::marker::PhantomData::<&'a D>,
         });
 
         unsafe {

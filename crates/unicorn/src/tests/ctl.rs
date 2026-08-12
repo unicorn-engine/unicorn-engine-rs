@@ -1,4 +1,5 @@
 use std::time::{Duration, Instant};
+use std::{cell::RefCell, rc::Rc};
 
 use unicorn_engine_sys::{RegisterX86, X86Insn};
 
@@ -152,13 +153,14 @@ fn test_uc_ctl_change_page_size_arm64() {
 fn test_uc_hook_cached_uaf() {
     let code = b"\x41\x4a\xeb\x00\x90";
 
-    let mut uc = Unicorn::new_with_data(Arch::X86, Mode::MODE_32, 0u64).unwrap();
+    let count = Rc::new(RefCell::new(0u64));
+    let mut uc = Unicorn::new_with_data(Arch::X86, Mode::MODE_32, ()).unwrap();
     uc.mem_map(CODE_START, CODE_LEN, Prot::ALL).unwrap();
     uc.mem_write(CODE_START, code).unwrap();
 
     let hook = uc
-        .add_code_hook(CODE_START, CODE_START + code.len() as u64, |uc, _, _| {
-            *uc.get_data_mut() += 1;
+        .add_code_hook(CODE_START, CODE_START + code.len() as u64, |_, _, _| {
+            *count.borrow_mut() += 1;
         })
         .unwrap();
 
@@ -180,7 +182,7 @@ fn test_uc_hook_cached_uaf() {
         .unwrap();
 
     // Only 4 calls
-    assert_eq!(*uc.get_data(), 4);
+    assert_eq!(*count.borrow(), 4);
 }
 
 #[test]
@@ -232,7 +234,8 @@ fn test_tlb_clear() {
         0xa3, 0x00, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, // movabs  dword ptr [0x200000], eax
     ];
 
-    let mut uc = Unicorn::new_with_data(Arch::X86, Mode::MODE_64, 0usize).unwrap();
+    let mut uc = Unicorn::new_with_data(Arch::X86, Mode::MODE_64, ()).unwrap();
+    let tlbcount = Rc::new(RefCell::new(0usize));
     uc.mem_map(CODE_START, CODE_LEN.try_into().unwrap(), Prot::ALL)
         .unwrap();
     uc.mem_write(CODE_START, code).unwrap();
@@ -240,8 +243,9 @@ fn test_tlb_clear() {
     uc.mem_map(0x200000, 0x1000, Prot::ALL).unwrap();
 
     uc.ctl_set_tlb_type(TlbType::VIRTUAL).unwrap();
-    uc.add_tlb_hook(1, 0, |uc, addr, _| {
-        *uc.get_data_mut() += 1;
+    let callback_tlbcount = Rc::clone(&tlbcount);
+    uc.add_tlb_hook(1, 0, move |_, addr, _| {
+        *callback_tlbcount.borrow_mut() += 1;
         Some(TlbEntry {
             paddr: addr,
             perms: Prot::ALL,
@@ -256,7 +260,7 @@ fn test_tlb_clear() {
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let tlbcount = *uc.get_data();
+    let tlbcount = *tlbcount.borrow();
     assert_eq!(tlbcount, 4);
 }
 
