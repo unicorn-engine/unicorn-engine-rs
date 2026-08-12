@@ -158,8 +158,6 @@ impl<D> Drop for UnicornInner<'_, D> {
 }
 
 /// A Unicorn emulator instance.
-///
-/// You could clone this instance cheaply, since it has an `Rc` inside.
 pub struct Unicorn<'a, D: 'a> {
     inner: Rc<UnsafeCell<UnicornInner<'a, D>>>,
 }
@@ -238,14 +236,6 @@ where
 impl<D> core::fmt::Debug for Unicorn<'_, D> {
     fn fmt(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
         write!(formatter, "Unicorn {{ uc: {:p} }}", self.get_handle())
-    }
-}
-
-impl<D> Clone for Unicorn<'_, D> {
-    fn clone(&self) -> Self {
-        Self {
-            inner: Rc::clone(&self.inner),
-        }
     }
 }
 
