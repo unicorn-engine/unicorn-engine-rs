@@ -104,6 +104,12 @@ extern "C" {
         timeout: u64,
         count: libc::size_t,
     ) -> uc_error;
+    pub fn uc_emu_run(
+        engine: uc_handle,
+        until: u64,
+        timeout: u64,
+        count: libc::size_t,
+    ) -> uc_error;
     pub fn uc_emu_stop(engine: uc_handle) -> uc_error;
     pub fn uc_hook_add(
         engine: uc_handle,
