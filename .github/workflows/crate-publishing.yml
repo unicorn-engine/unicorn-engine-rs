@@ -74,4 +74,4 @@ jobs:
         env:
           TOKEN: ${{ secrets.cratesio_token }}
         run: |
-          cargo login $TOKEN && cargo publish -p unicorn-engine-sys && cd bindings/rust/unicorn-engine && cargo publish -p unicorn-engine
+          cargo login $TOKEN && cargo publish -p unicorn-engine-sys --locked && cargo publish -p unicorn-engine --locked
