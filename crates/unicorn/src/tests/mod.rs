@@ -16,6 +16,8 @@ mod ppc;
 mod riscv;
 #[cfg(feature = "arch_s390x")]
 mod s390x;
+#[cfg(feature = "arch_x86")]
+mod x86;
 
 use crate::{Arch, HookType, Mode, Prot, TlbEntry, TlbType, Unicorn, uc_error};
 
