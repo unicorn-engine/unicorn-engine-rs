@@ -73,6 +73,21 @@ fn build_with_cmake() {
         ninja_available()
     };
 
+    // When cross-compiling for Android with the NDK toolchain, we must
+    // tell cmake which ANDROID_ABI we want (mapped from the Rust TARGET).
+    if let Ok(target) = std::env::var("TARGET") {
+        let abi = match target.as_str() {
+            t if t.contains("aarch64-linux-android") => "arm64-v8a",
+            t if t.contains("armv7-linux-androideabi") => "armeabi-v7a",
+            t if t.contains("x86_64-linux-android") => "x86_64",
+            t if t.contains("i686-linux-android") => "x86",
+            _ => "",
+        };
+        if !abi.is_empty() {
+            config.define("ANDROID_ABI", abi);
+        }
+    }
+
     // Configure build generator
     if has_ninja {
         config.generator("Ninja");
@@ -146,9 +161,15 @@ fn build_with_cmake() {
         println!("cargo:rustc-link-lib=static=unicorn");
     }
     if !compiler.is_like_msvc() {
-        println!("cargo:rustc-link-lib=pthread");
+        if !is_android_target() {
+            println!("cargo:rustc-link-lib=pthread");
+        }
         println!("cargo:rustc-link-lib=m");
     }
+}
+
+fn is_android_target() -> bool {
+    std::env::var("TARGET").map_or(false, |t| t.contains("android"))
 }
 
 fn watch_source_files() {
@@ -374,7 +395,9 @@ fn main() {
             } else {
                 println!("cargo:rustc-link-arg=-Wl,-allow-multiple-definition");
                 println!("cargo:rustc-link-lib=static=unicorn");
-                println!("cargo:rustc-link-lib=pthread");
+                if !is_android_target() {
+                    println!("cargo:rustc-link-lib=pthread");
+                }
                 println!("cargo:rustc-link-lib=m");
             }
         }
