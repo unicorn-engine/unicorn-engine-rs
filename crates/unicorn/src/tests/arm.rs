@@ -1,5 +1,6 @@
 use super::*;
 use crate::{ArmCpuModel, RegisterARM, RegisterARMCP, TcgOpCode, TcgOpFlag, uc_error};
+use std::{cell::RefCell, rc::Rc};
 
 #[test]
 fn test_arm_nop() {
@@ -146,14 +147,14 @@ fn test_arm_thumb_ite() {
     let mut r2 = 0u32;
     let mut r3 = 1u32;
     let mut pc = CODE_START as u32;
-    let mut count = 0;
+    let count = Rc::new(RefCell::new(0u64));
 
     let mut uc = uc_common_setup(
         Arch::ARM,
         Mode::THUMB,
         Some(ArmCpuModel::CORTEX_A15 as i32),
         code,
-        count,
+        (),
     );
 
     uc.reg_write(RegisterARM::SP, sp).unwrap();
@@ -166,9 +167,14 @@ fn test_arm_thumb_ite() {
     r2 = 0x4d;
     uc.mem_write(sp + 4, &r2.to_le_bytes()).unwrap();
 
-    uc.add_code_hook(CODE_START, CODE_START + code.len() as u64, |uc, _, _| {
-        *uc.get_data_mut() += 1;
-    })
+    let callback_count = Rc::clone(&count);
+    uc.add_code_hook(
+        CODE_START,
+        CODE_START + code.len() as u64,
+        move |_, _, _| {
+            *callback_count.borrow_mut() += 1;
+        },
+    )
     .unwrap();
 
     // Execute four instructions
@@ -177,13 +183,12 @@ fn test_arm_thumb_ite() {
 
     r2 = uc.reg_read(RegisterARM::R2).unwrap() as u32;
     r3 = uc.reg_read(RegisterARM::R3).unwrap() as u32;
-    count = *uc.get_data();
     assert_eq!(r2, 0x68);
     assert_eq!(r3, 0x78);
-    assert_eq!(count, 4);
+    assert_eq!(*count.borrow(), 4);
 
     r2 = 0;
-    *uc.get_data_mut() = 0;
+    *count.borrow_mut() = 0;
 
     uc.reg_write(RegisterARM::R2, r2 as u64).unwrap();
     uc.reg_write(RegisterARM::R3, r3 as u64).unwrap();
@@ -198,11 +203,10 @@ fn test_arm_thumb_ite() {
 
     r2 = uc.reg_read(RegisterARM::R2).unwrap() as u32;
     r3 = uc.reg_read(RegisterARM::R3).unwrap() as u32;
-    count = *uc.get_data();
 
     assert_eq!(r2, 0x68);
     assert_eq!(r3, 0x78);
-    assert_eq!(count, 4);
+    assert_eq!(*count.borrow(), 4);
 }
 
 #[test]
@@ -559,19 +563,22 @@ fn test_arm_mem_access_abort() {
         Mode::ARM,
         Some(ArmCpuModel::CORTEX_A9 as i32),
         code,
-        0,
+        (),
     );
+    let callback_pc = Rc::new(RefCell::new(0u64));
 
     uc.reg_write(RegisterARM::R0, r0 as u64).unwrap();
 
-    uc.add_mem_hook(HookType::MEM_UNMAPPED, 1, 0, |uc, _, _, _, _| {
-        *uc.get_data_mut() = uc.reg_read(RegisterARM::PC).unwrap();
+    let mem_callback_pc = Rc::clone(&callback_pc);
+    uc.add_mem_hook(HookType::MEM_UNMAPPED, 1, 0, move |uc, _, _, _, _| {
+        *mem_callback_pc.borrow_mut() = uc.reg_read(RegisterARM::PC).unwrap();
         false
     })
     .unwrap();
 
-    uc.add_insn_invalid_hook(|uc| {
-        *uc.get_data_mut() = uc.reg_read(RegisterARM::PC).unwrap();
+    let invalid_callback_pc = Rc::clone(&callback_pc);
+    uc.add_insn_invalid_hook(move |uc| {
+        *invalid_callback_pc.borrow_mut() = uc.reg_read(RegisterARM::PC).unwrap();
         false
     })
     .unwrap();
@@ -580,7 +587,7 @@ fn test_arm_mem_access_abort() {
     assert_eq!(err, uc_error::READ_UNMAPPED);
 
     let pc = uc.reg_read(RegisterARM::PC).unwrap();
-    assert_eq!(pc, *uc.get_data());
+    assert_eq!(pc, *callback_pc.borrow());
 
     let err = uc
         .emu_start(CODE_START + 4, CODE_START + 8, 0, 0)
@@ -588,13 +595,13 @@ fn test_arm_mem_access_abort() {
     assert_eq!(err, uc_error::INSN_INVALID);
 
     let pc = uc.reg_read(RegisterARM::PC).unwrap();
-    assert_eq!(pc, *uc.get_data());
+    assert_eq!(pc, *callback_pc.borrow());
 
     let err = uc.emu_start(0x900000, 0x900000 + 8, 0, 0).unwrap_err();
     assert_eq!(err, uc_error::FETCH_UNMAPPED);
 
     let pc = uc.reg_read(RegisterARM::PC).unwrap();
-    assert_eq!(pc, *uc.get_data());
+    assert_eq!(pc, *callback_pc.borrow());
 }
 
 #[test]
@@ -805,20 +812,23 @@ fn test_arm_mem_hook_read_write() {
         Mode::ARM,
         Some(ArmCpuModel::CORTEX_A15 as i32),
         code,
-        [0u64; 2],
+        (),
     );
 
     uc.reg_write(RegisterARM::SP, sp).unwrap();
     uc.mem_map(0x8000, 1024 * 16, Prot::ALL).unwrap();
 
-    uc.add_mem_hook(HookType::MEM_READ, 1, 0, |uc, _, _, _, _| {
-        (*uc.get_data_mut())[0] += 1;
+    let counters = Rc::new(RefCell::new([0u64; 2]));
+    let read_counters = Rc::clone(&counters);
+    uc.add_mem_hook(HookType::MEM_READ, 1, 0, move |_, _, _, _, _| {
+        read_counters.borrow_mut()[0] += 1;
         false
     })
     .unwrap();
 
-    uc.add_mem_hook(HookType::MEM_WRITE, 1, 0, |uc, _, _, _, _| {
-        (*uc.get_data_mut())[1] += 1;
+    let write_counters = Rc::clone(&counters);
+    uc.add_mem_hook(HookType::MEM_WRITE, 1, 0, move |_, _, _, _, _| {
+        write_counters.borrow_mut()[1] += 1;
         false
     })
     .unwrap();
@@ -826,7 +836,7 @@ fn test_arm_mem_hook_read_write() {
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let [read, write] = *uc.get_data();
+    let [read, write] = *counters.borrow();
     assert_eq!(read, 2);
     assert_eq!(write, 2);
 }
@@ -839,8 +849,8 @@ struct CmpInfo {
     pc: u64,
 }
 
-fn uc_hook_sub_cmp(uc: &mut Unicorn<'_, CmpInfo>, address: u64, arg1: u64, arg2: u64, size: usize) {
-    let data = uc.get_data_mut();
+fn uc_hook_sub_cmp(data: &Rc<RefCell<CmpInfo>>, address: u64, arg1: u64, arg2: u64, size: usize) {
+    let mut data = data.borrow_mut();
     data.pc = address;
     data.size = size as u64;
     data.v0 = arg1;
@@ -862,16 +872,24 @@ fn test_arm_tcg_opcode_cmp() {
         Mode::ARM,
         Some(ArmCpuModel::CORTEX_A15 as i32),
         code,
-        CmpInfo::default(),
+        (),
     );
+    let cmp_info = Rc::new(RefCell::new(CmpInfo::default()));
+    let cmp_callback_info = Rc::clone(&cmp_info);
 
-    uc.add_tcg_hook(TcgOpCode::SUB, TcgOpFlag::CMP, 1, 0, uc_hook_sub_cmp)
-        .unwrap();
+    uc.add_tcg_hook(
+        TcgOpCode::SUB,
+        TcgOpFlag::CMP,
+        1,
+        0,
+        move |_, a, b, c, d| uc_hook_sub_cmp(&cmp_callback_info, a, b, c, d),
+    )
+    .unwrap();
 
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 3)
         .unwrap();
 
-    let cmp_info = uc.get_data();
+    let cmp_info = cmp_info.borrow();
     assert_eq!(cmp_info.v0, 5);
     assert_eq!(cmp_info.v1, 3);
     assert_eq!(cmp_info.pc, 0x1008);
@@ -895,16 +913,24 @@ fn test_arm_thumb_tcg_opcode_cmn() {
         Mode::THUMB,
         Some(ArmCpuModel::CORTEX_A15 as i32),
         code,
-        CmpInfo::default(),
+        (),
     );
+    let cmp_info = Rc::new(RefCell::new(CmpInfo::default()));
+    let cmp_callback_info = Rc::clone(&cmp_info);
 
-    uc.add_tcg_hook(TcgOpCode::SUB, TcgOpFlag::CMP, 1, 0, uc_hook_sub_cmp)
-        .unwrap();
+    uc.add_tcg_hook(
+        TcgOpCode::SUB,
+        TcgOpFlag::CMP,
+        1,
+        0,
+        move |_, a, b, c, d| uc_hook_sub_cmp(&cmp_callback_info, a, b, c, d),
+    )
+    .unwrap();
 
     uc.emu_start(CODE_START | 1, CODE_START + code.len() as u64, 0, 4)
         .unwrap();
 
-    let cmp_info = uc.get_data();
+    let cmp_info = cmp_info.borrow();
     assert_eq!(cmp_info.v0, 5);
     assert_eq!(cmp_info.v1, 3);
     assert_eq!(cmp_info.pc, 0x1006);

@@ -1,3 +1,4 @@
+use std::{cell::RefCell, rc::Rc};
 use unicorn_engine_sys::{Arm64CpuModel, Arm64Insn, RegisterARM64, RegisterARM64CP};
 
 use super::*;
@@ -251,22 +252,22 @@ fn test_arm64_block_sync_pc() {
         0xc1, 0xc5, 0x82, 0xd2, // t: mov x1, #5678
     ];
 
+    let first = Rc::new(RefCell::new(true));
+    let callback_first = Rc::clone(&first);
     let mut uc = uc_common_setup(
         Arch::ARM64,
         Mode::ARM,
         Some(Arm64CpuModel::A72 as i32),
         code,
-        true,
+        (),
     );
-
-    uc.add_block_hook(CODE_START + 8, CODE_START + 12, |uc, addr, _| {
+    uc.add_block_hook(CODE_START + 8, CODE_START + 12, move |uc, addr, _| {
         let pc = uc.reg_read(RegisterARM64::PC).unwrap();
         assert_eq!(pc, addr);
         let val = CODE_START;
-        let first = *uc.get_data_mut();
-        if first {
+        if *callback_first.borrow() {
             uc.reg_write(RegisterARM64::PC, val).unwrap();
-            *uc.get_data_mut() = false;
+            *callback_first.borrow_mut() = false;
         }
     })
     .unwrap();
@@ -510,26 +511,29 @@ fn test_arm64_mem_hook_read_write() {
         0xe1, 0x0b, 0x00, 0xa9, // stp x1, x2, [sp]
     ];
 
+    let counters = Rc::new(RefCell::new([0u64; 2]));
+    let read_counters = Rc::clone(&counters);
+    let write_counters = Rc::clone(&counters);
     let mut uc = uc_common_setup(
         Arch::ARM64,
         Mode::ARM,
         Some(Arm64CpuModel::A72 as i32),
         code,
-        [0, 0],
+        (),
     );
 
     let sp = 0x16db6a040;
     uc.reg_write(RegisterARM64::SP, sp).unwrap();
     uc.mem_map(0x16db68000, 1024 * 16, Prot::ALL).unwrap();
 
-    uc.add_mem_hook(HookType::MEM_READ, 1, 0, |uc, _, _, _, _| {
-        (*uc.get_data_mut())[0] += 1;
+    uc.add_mem_hook(HookType::MEM_READ, 1, 0, move |_, _, _, _, _| {
+        read_counters.borrow_mut()[0] += 1;
         false
     })
     .unwrap();
 
-    uc.add_mem_hook(HookType::MEM_WRITE, 1, 0, |uc, _, _, _, _| {
-        (*uc.get_data_mut())[1] += 1;
+    uc.add_mem_hook(HookType::MEM_WRITE, 1, 0, move |_, _, _, _, _| {
+        write_counters.borrow_mut()[1] += 1;
         false
     })
     .unwrap();
@@ -537,7 +541,7 @@ fn test_arm64_mem_hook_read_write() {
     uc.emu_start(CODE_START, CODE_START + code.len() as u64, 0, 0)
         .unwrap();
 
-    let [read, write] = *uc.get_data();
+    let [read, write] = *counters.borrow();
     assert_eq!(read, 4);
     assert_eq!(write, 4);
 }

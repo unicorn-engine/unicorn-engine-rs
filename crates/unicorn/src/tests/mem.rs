@@ -1,6 +1,8 @@
+use std::{cell::RefCell, rc::Rc};
 use unicorn_engine_sys::{ContextMode, RegisterX86};
 
 use super::*;
+use crate::HookContext;
 
 #[test]
 fn test_map_correct() {
@@ -185,14 +187,16 @@ fn test_mem_protect_remove_exec() {
         0x90,       // nop
     ];
 
-    let mut uc = Unicorn::new_with_data(Arch::X86, Mode::MODE_64, 0).unwrap();
+    let mut uc = Unicorn::new_with_data(Arch::X86, Mode::MODE_64, ()).unwrap();
+    let count = Rc::new(RefCell::new(0u64));
 
     uc.mem_map(0x1000, 0x1000, Prot::ALL).unwrap();
     uc.mem_map(0x2000, 0x1000, Prot::ALL).unwrap();
 
     uc.mem_write(0x1000, &code).unwrap();
-    uc.add_block_hook(1, 0, |uc, _, _| {
-        *uc.get_data_mut() += 1;
+    let callback_count = Rc::clone(&count);
+    uc.add_block_hook(1, 0, move |uc, _, _| {
+        *callback_count.borrow_mut() += 1;
         uc.mem_protect(0x2000, 0x1000, Prot::READ).unwrap();
     })
     .unwrap();
@@ -200,7 +204,7 @@ fn test_mem_protect_remove_exec() {
     uc.emu_start(0x1000, 0x1000 + code.len() as u64, 0, 0)
         .unwrap();
 
-    assert_eq!(*uc.get_data_mut(), 2);
+    assert_eq!(*count.borrow(), 2);
 }
 
 #[test]
@@ -211,7 +215,8 @@ fn test_mem_protect_mmio() {
         0xa3, 0x20, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // movabs dword ptr [0x2020], eax
     ];
 
-    let mut uc = Unicorn::new_with_data(Arch::X86, Mode::MODE_64, 0).unwrap();
+    let mut uc = Unicorn::new_with_data(Arch::X86, Mode::MODE_64, ()).unwrap();
+    let count = Rc::new(RefCell::new(0i32));
 
     uc.mem_map(0x8000, 0x1000, Prot::ALL).unwrap();
     uc.mem_write(0x8000, &code).unwrap();
@@ -219,12 +224,15 @@ fn test_mem_protect_mmio() {
     uc.mmio_map(
         0x1000,
         0x3000,
-        Some(|uc: &mut Unicorn<'_, i32>, addr, _| {
-            assert_eq!(addr, 0x20);
-            *uc.get_data_mut() += 1;
-            0x114514
+        Some({
+            let callback_count = Rc::clone(&count);
+            move |_: &mut HookContext, addr, _| {
+                assert_eq!(addr, 0x20);
+                *callback_count.borrow_mut() += 1;
+                0x114514
+            }
         }),
-        Some(|_: &mut Unicorn<'_, i32>, _addr, _size, _val| {
+        Some(|_: &mut HookContext, _addr, _size, _val| {
             panic!("Write callback should not be called");
         }),
     )
@@ -237,7 +245,7 @@ fn test_mem_protect_mmio() {
     );
     let eax = uc.reg_read(RegisterX86::RAX).unwrap();
 
-    assert_eq!(*uc.get_data_mut(), 1);
+    assert_eq!(*count.borrow(), 1);
     assert_eq!(eax, 0x114514u64);
 }
 
