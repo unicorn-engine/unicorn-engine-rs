@@ -1,4 +1,8 @@
-use std::time::{Duration, Instant};
+use std::{
+    cell::Cell,
+    rc::Rc,
+    time::{Duration, Instant},
+};
 
 use unicorn_engine_sys::{RegisterX86, X86Insn};
 
@@ -181,6 +185,53 @@ fn test_uc_hook_cached_uaf() {
 
     // Only 4 calls
     assert_eq!(*uc.get_data(), 4);
+}
+
+#[test]
+fn test_self_removed_hook_defers_drop() {
+    struct DropFlag(Rc<Cell<bool>>);
+
+    impl Drop for DropFlag {
+        fn drop(&mut self) {
+            self.0.set(true);
+        }
+    }
+
+    let mut uc = Unicorn::new(Arch::X86, Mode::MODE_32).unwrap();
+    uc.mem_map(CODE_START, CODE_LEN, Prot::ALL).unwrap();
+    uc.mem_write(CODE_START, b"\x90\x90").unwrap();
+
+    let hook_id = Rc::new(Cell::new(None));
+    let dropped = Rc::new(Cell::new(false));
+    let dropped_during_nested_emu = Rc::new(Cell::new(None));
+    let nested_emu_dropped = Rc::clone(&dropped);
+    let nested_emu_result = Rc::clone(&dropped_during_nested_emu);
+
+    // observes whether the removed callback remains alive in nested emulation.
+    uc.add_code_hook(
+        CODE_START + 1,
+        CODE_START + 1,
+        move |_, _, _| nested_emu_result.set(Some(nested_emu_dropped.get())),
+    )
+    .unwrap();
+
+    let callback_hook_id = Rc::clone(&hook_id);
+    let drop_flag = DropFlag(Rc::clone(&dropped));
+
+    // registers a callback that removes itself, then starts nested emulation.
+    let hook = uc
+        .add_code_hook(CODE_START, CODE_START, move |uc, _, _| {
+            let _ = &drop_flag;
+            uc.remove_hook(callback_hook_id.get().unwrap()).unwrap();
+            uc.emu_start(CODE_START + 1, CODE_START + 2, 0, 0).unwrap();
+        })
+        .unwrap();
+    hook_id.set(Some(hook));
+
+    uc.emu_start(CODE_START, CODE_START + 1, 0, 0).unwrap();
+
+    assert_eq!(dropped_during_nested_emu.get(), Some(false));
+    assert!(dropped.get());
 }
 
 #[test]

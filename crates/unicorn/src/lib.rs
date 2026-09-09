@@ -143,6 +143,9 @@ pub struct UnicornInner<'a, D> {
     pub arch: Arch,
     /// to keep ownership over the hook for this uc instance's lifetime
     pub hooks: Vec<(UcHookId, Box<dyn hook::IsUcHook<'a> + 'a>)>,
+    // Hooks removed while emulation is active, retained until the outermost emulation returns.
+    pub deleted_hooks: Vec<Box<dyn hook::IsUcHook<'a> + 'a>>,
+    pub emu_depth: usize,
     /// To keep ownership over the mmio callbacks for this uc instance's lifetime
     pub mmio_callbacks: Vec<MmioCallbackScope<'a>>,
     pub data: D,
@@ -196,6 +199,8 @@ where
                     arch,
                     data,
                     hooks: vec![],
+                    deleted_hooks: vec![],
+                    emu_depth: 0,
                     mmio_callbacks: vec![],
                 })),
             })
@@ -227,6 +232,8 @@ where
                 arch: arch.try_into()?,
                 data,
                 hooks: vec![],
+                deleted_hooks: vec![],
+                emu_depth: 0,
                 mmio_callbacks: vec![],
             })),
         })
@@ -1172,12 +1179,19 @@ impl<'a, D> Unicorn<'a, D> {
     /// Remove a hook.
     ///
     /// `hook_id` is the value returned by `add_*_hook` functions.
+    ///
+    /// Unicorn core marks a deleted hook and releases it after the outermost
+    /// emulation call returns.
     pub fn remove_hook(&mut self, hook_id: UcHookId) -> Result<(), uc_error> {
-        // drop the hook
         let inner = self.inner_mut();
-        inner.hooks.retain(|(id, _)| id != &hook_id);
+        unsafe { uc_hook_del(inner.handle, hook_id.0) }.and_then(|| {
+            if let Some(index) = inner.hooks.iter().position(|(id, _)| id == &hook_id) {
+                let (_, callback) = inner.hooks.remove(index);
+                inner.deleted_hooks.push(callback);
+            }
 
-        unsafe { uc_hook_del(inner.handle, hook_id.0) }.into()
+            Ok(())
+        })
     }
 
     /// Allocate and return an empty Unicorn context.
@@ -1237,7 +1251,15 @@ impl<'a, D> Unicorn<'a, D> {
         timeout: u64,
         count: usize,
     ) -> Result<(), uc_error> {
-        unsafe { uc_emu_start(self.get_handle(), begin, until, timeout, count as _) }.into()
+        let inner = self.inner_mut();
+        inner.emu_depth += 1;
+        let result =
+            unsafe { uc_emu_start(inner.handle, begin, until, timeout, count as _) }.into();
+        inner.emu_depth -= 1;
+        if inner.emu_depth == 0 {
+            inner.deleted_hooks.clear();
+        }
+        result
     }
 
     /// Stop the emulation.
