@@ -53,6 +53,29 @@ pub mod hook; // lets consumers call hooks
 #[cfg(test)]
 mod tests;
 
+/// Return the Unicorn library version as `(major, minor, combined)`.
+#[must_use]
+pub fn version() -> (u32, u32, u32) {
+    let mut major = 0;
+    let mut minor = 0;
+    let combined = unsafe { uc_version(&raw mut major, &raw mut minor) };
+    (major, minor, combined)
+}
+
+/// Return whether this Unicorn build supports `arch`.
+#[must_use]
+pub fn arch_supported(arch: Arch) -> bool {
+    unsafe { uc_arch_supported(arch) }
+}
+
+/// Return the string describing `error_code`.
+#[must_use]
+pub fn strerror(error_code: uc_error) -> &'static str {
+    unsafe { core::ffi::CStr::from_ptr(uc_strerror(error_code)) }
+        .to_str()
+        .unwrap_or("invalid Unicorn error")
+}
+
 #[derive(Debug)]
 pub struct Context {
     context: *mut uc_context,
@@ -74,6 +97,142 @@ impl Context {
         unsafe { uc_context_reg_write(self.context, regid.into(), (&raw const value).cast()) }
             .into()
     }
+
+    /// Read multiple unsigned values from a context.
+    ///
+    /// Not to be used with registers larger than 64 bit.
+    pub fn reg_read_batch<T: Copy + Into<i32>>(&self, regids: &[T]) -> Result<Vec<u64>, uc_error> {
+        let regids = batch_regids(regids, regids.len())?;
+        let mut values = vec![0u64; regids.len()];
+        let mut pointers = values
+            .iter_mut()
+            .map(|value| (value as *mut u64).cast())
+            .collect::<Vec<*mut c_void>>();
+        unsafe {
+            uc_context_reg_read_batch(
+                self.context,
+                regids.as_ptr(),
+                pointers.as_mut_ptr(),
+                regids.len() as i32,
+            )
+        }
+        .and(Ok(values))
+    }
+
+    /// Write multiple unsigned values to a context.
+    ///
+    /// Not to be used with registers larger than 64 bit.
+    pub fn reg_write_batch<T: Copy + Into<i32>>(
+        &mut self,
+        regids: &[T],
+        values: &[u64],
+    ) -> Result<(), uc_error> {
+        let regids = batch_regids(regids, values.len())?;
+        let pointers = values
+            .iter()
+            .map(|value| (value as *const u64).cast_mut().cast())
+            .collect::<Vec<*mut c_void>>();
+        unsafe {
+            uc_context_reg_write_batch(
+                self.context,
+                regids.as_ptr(),
+                pointers.as_ptr(),
+                regids.len() as i32,
+            )
+        }
+        .into()
+    }
+
+    /// Read a register into a caller-provided buffer.
+    pub fn reg_read_bytes<T: Into<i32>>(
+        &self,
+        regid: T,
+        value: &mut [u8],
+    ) -> Result<usize, uc_error> {
+        let mut size = value.len();
+        unsafe {
+            uc_context_reg_read2(
+                self.context,
+                regid.into(),
+                value.as_mut_ptr().cast(),
+                &mut size,
+            )
+        }
+        .and(Ok(size))
+    }
+
+    /// Write a register from a caller-provided buffer.
+    pub fn reg_write_bytes<T: Into<i32>>(
+        &mut self,
+        regid: T,
+        value: &[u8],
+    ) -> Result<usize, uc_error> {
+        let mut size = value.len();
+        unsafe {
+            uc_context_reg_write2(self.context, regid.into(), value.as_ptr().cast(), &mut size)
+        }
+        .and(Ok(size))
+    }
+
+    /// Read multiple registers into caller-provided buffers.
+    pub fn reg_read_batch_bytes<T: Copy + Into<i32>>(
+        &self,
+        regids: &[T],
+        values: &mut [&mut [u8]],
+    ) -> Result<Vec<usize>, uc_error> {
+        let regids = batch_regids(regids, values.len())?;
+        let mut pointers = values
+            .iter_mut()
+            .map(|value| value.as_mut_ptr().cast())
+            .collect::<Vec<*mut c_void>>();
+        let mut sizes = values.iter().map(|value| value.len()).collect::<Vec<_>>();
+        let count = regids.len() as i32;
+        unsafe {
+            uc_context_reg_read_batch2(
+                self.context,
+                regids.as_ptr(),
+                pointers.as_mut_ptr(),
+                sizes.as_mut_ptr(),
+                count,
+            )
+        }
+        .and(Ok(sizes))
+    }
+
+    /// Write multiple registers from caller-provided buffers.
+    pub fn reg_write_batch_bytes<T: Copy + Into<i32>>(
+        &mut self,
+        regids: &[T],
+        values: &[&[u8]],
+    ) -> Result<Vec<usize>, uc_error> {
+        let regids = batch_regids(regids, values.len())?;
+        let pointers = values
+            .iter()
+            .map(|value| value.as_ptr().cast())
+            .collect::<Vec<*const c_void>>();
+        let mut sizes = values.iter().map(|value| value.len()).collect::<Vec<_>>();
+        let count = regids.len() as i32;
+        unsafe {
+            uc_context_reg_write_batch2(
+                self.context,
+                regids.as_ptr(),
+                pointers.as_ptr(),
+                sizes.as_mut_ptr(),
+                count,
+            )
+        }
+        .and(Ok(sizes))
+    }
+}
+
+fn batch_regids<T: Copy + Into<i32>>(
+    regids: &[T],
+    value_count: usize,
+) -> Result<Vec<i32>, uc_error> {
+    if regids.len() != value_count || regids.len() > i32::MAX as usize {
+        return Err(uc_error::ARG);
+    }
+    Ok(regids.iter().map(|regid| (*regid).into()).collect())
 }
 
 impl Drop for Context {
@@ -273,6 +432,16 @@ impl<'a, D> Unicorn<'a, D> {
     #[must_use]
     pub fn get_handle(&self) -> *mut uc_engine {
         self.inner().handle
+    }
+
+    /// Return the last error code recorded by the underlying Unicorn engine.
+    pub fn errno(&self) -> uc_error {
+        unsafe { uc_errno(self.get_handle()) }
+    }
+
+    /// Return the size needed to store a Unicorn CPU context.
+    pub fn context_size(&self) -> usize {
+        unsafe { uc_context_size(self.get_handle()) }
     }
 
     /// Returns a vector with the memory regions that are mapped in the emulator.
@@ -589,6 +758,24 @@ impl<'a, D> Unicorn<'a, D> {
         unsafe { uc_reg_write(self.get_handle(), regid.into(), value.as_ptr().cast()) }.into()
     }
 
+    /// Write a variable-sized register value and return the number of bytes written.
+    pub fn reg_write_bytes<T: Into<i32>>(
+        &mut self,
+        regid: T,
+        value: &[u8],
+    ) -> Result<usize, uc_error> {
+        let mut size = value.len();
+        unsafe {
+            uc_reg_write2(
+                self.get_handle(),
+                regid.into(),
+                value.as_ptr().cast(),
+                &mut size,
+            )
+        }
+        .and(Ok(size))
+    }
+
     /// Read an unsigned value from a register.
     ///
     /// Not to be used with registers larger than 64 bit.
@@ -646,6 +833,74 @@ impl<'a, D> Unicorn<'a, D> {
         let mut value = vec![0; value_size];
         unsafe { uc_reg_read(self.get_handle(), curr_reg_id, value.as_mut_ptr().cast()) }
             .and_then(|| Ok(value.into_boxed_slice()))
+    }
+
+    /// Read a variable-sized register value into a caller-provided buffer.
+    pub fn reg_read_bytes<T: Into<i32>>(
+        &self,
+        regid: T,
+        value: &mut [u8],
+    ) -> Result<usize, uc_error> {
+        let mut size = value.len();
+        unsafe {
+            uc_reg_read2(
+                self.get_handle(),
+                regid.into(),
+                value.as_mut_ptr().cast(),
+                &mut size,
+            )
+        }
+        .and(Ok(size))
+    }
+
+    /// Read multiple registers into caller-provided buffers.
+    pub fn reg_read_batch_bytes<T: Copy + Into<i32>>(
+        &self,
+        regids: &[T],
+        values: &mut [&mut [u8]],
+    ) -> Result<Vec<usize>, uc_error> {
+        let regids = batch_regids(regids, values.len())?;
+        let mut pointers = values
+            .iter_mut()
+            .map(|value| value.as_mut_ptr().cast())
+            .collect::<Vec<*mut c_void>>();
+        let mut sizes = values.iter().map(|value| value.len()).collect::<Vec<_>>();
+        let count = regids.len() as i32;
+        unsafe {
+            uc_reg_read_batch2(
+                self.get_handle(),
+                regids.as_ptr(),
+                pointers.as_mut_ptr(),
+                sizes.as_mut_ptr(),
+                count,
+            )
+        }
+        .and(Ok(sizes))
+    }
+
+    /// Write multiple registers from caller-provided buffers.
+    pub fn reg_write_batch_bytes<T: Copy + Into<i32>>(
+        &mut self,
+        regids: &[T],
+        values: &[&[u8]],
+    ) -> Result<Vec<usize>, uc_error> {
+        let regids = batch_regids(regids, values.len())?;
+        let pointers = values
+            .iter()
+            .map(|value| value.as_ptr().cast())
+            .collect::<Vec<*const c_void>>();
+        let mut sizes = values.iter().map(|value| value.len()).collect::<Vec<_>>();
+        let count = regids.len() as i32;
+        unsafe {
+            uc_reg_write_batch2(
+                self.get_handle(),
+                regids.as_ptr(),
+                pointers.as_ptr(),
+                sizes.as_mut_ptr(),
+                count,
+            )
+        }
+        .and(Ok(sizes))
     }
 
     /// Read ARM Coprocessor register
@@ -1508,6 +1763,29 @@ impl<'a, D> Unicorn<'a, D> {
                 self.get_handle(),
                 UC_CTL_WRITE!(ControlType::CONTEXT_MODE),
                 mode,
+            )
+        }
+        .into()
+    }
+
+    pub fn ctl_get_tcg_buffer_size(&self) -> Result<u32, uc_error> {
+        let mut size = 0;
+        unsafe {
+            uc_ctl(
+                self.get_handle(),
+                UC_CTL_READ!(ControlType::TCG_BUFFER_SIZE),
+                &mut size,
+            )
+        }
+        .and(Ok(size))
+    }
+
+    pub fn ctl_set_tcg_buffer_size(&mut self, size: u32) -> Result<(), uc_error> {
+        unsafe {
+            uc_ctl(
+                self.get_handle(),
+                UC_CTL_WRITE!(ControlType::TCG_BUFFER_SIZE),
+                size,
             )
         }
         .into()
