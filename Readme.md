@@ -36,6 +36,15 @@ Add this to your `Cargo.toml`:
 unicorn-engine = "2"
 ```
 
+## no_std
+
+Both `unicorn-engine` and `unicorn-engine-sys` are `no_std`; the safe wrapper uses `alloc`. Disable default features to build only the architectures you need:
+
+```toml
+[dependencies]
+unicorn-engine = { version = "2", default-features = false, features = ["arch_x86"] }
+```
+
 ## Crate Release Notice
 
 At this moment, we release both crates to `uncorn-engine-sys` and `unicorn-engine` but in near future we will release to `unicorn` and `unicorn-sys`.
